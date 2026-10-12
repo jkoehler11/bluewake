@@ -30,7 +30,9 @@ TARGET_SDK = 35
 CPU = "cortex-a78"
 
 def apk_filename(variant):
-    """Versioned APK filename: WindWakerRecomp-<variant>-<sha8>-<HHMMSS>.apk"""
+    """Versioned APK filename: WindWakerRecomp-<variant>-<sha8>-<HHMMSS>.apk.
+    BLUEWAKE_APK_VARIANT overrides the variant label (e.g. 'pgo')."""
+    variant = os.environ.get("BLUEWAKE_APK_VARIANT", variant)
     import datetime
     try:
         sha = subprocess.check_output(["git", "-C", str(REPO), "rev-parse", "--short=8", "HEAD"],
