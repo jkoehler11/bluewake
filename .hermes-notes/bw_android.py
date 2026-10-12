@@ -11,7 +11,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 REPO = Path("/home/james/nfs/Projects/bluewake")
-PREPARED = Path("/home/james/bw-build-android/prepared-lean")
+PREPARED = Path("/home/james/bw-build-android/prepared-behaviour")
 OUT = Path("/home/james/bw-build-android")
 SDK = Path("/home/james/android-sdk")
 NDK = SDK / "ndk/android-ndk-r30"
@@ -43,6 +43,9 @@ def apk_filename(variant):
     return f"WindWakerRecomp-{variant}-{sha}-{ts}.apk"
 
 def default_jobs():
+    forced = os.environ.get("BW_JOBS")
+    if forced and forced.isdigit():
+        return int(forced)
     try:
         with open("/proc/meminfo") as m:
             for line in m:
@@ -265,7 +268,7 @@ def package():
 def install():
     log("installing on Waydroid over adb")
     remote = f"/sdcard/Android/data/{APP_ID}/files"
-    apk = sorted(OUT.glob("WindWakerRecomp-untrained-*.apk"))[-1]
+    apk = sorted(OUT.glob("WindWakerRecomp-*.apk"), key=lambda p: p.stat().st_mtime)[-1]
     game = PREPARED / "game"
     iso = PREPARED / "BlueWake/game/GZLE01.iso"
 

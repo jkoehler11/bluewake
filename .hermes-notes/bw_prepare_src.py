@@ -9,7 +9,7 @@ REPO = Path("/home/james/nfs/Projects/bluewake")
 sys.path.insert(0, str(REPO / "scripts/linux"))
 import build as linux_build
 
-OUT = Path("/home/james/bw-build-android/prepared-lean")  # lean-memory + lean-deadlines prepared source
+OUT = Path("/home/james/bw-build-android/prepared-behaviour")  # lean-memory + lean-deadlines + behaviour-timing
 ISO = Path("/home/james/bw-build-0215/BlueWake/game/GZLE01.iso")
 
 # Minimal args object matching what the Builder methods touch.
@@ -31,6 +31,7 @@ args = types.SimpleNamespace(
     native_skin=True, native_game_math=True,
     lean_memory=True, native_entries=False, lean_blocks=True,
     lean_deadlines=True,
+    behaviour_timing=True,
     accept_new_composite=False,
     appimage=False, ci_container=False,
     no_tiered=False, no_cold=False,

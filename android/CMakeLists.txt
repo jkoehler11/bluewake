@@ -84,7 +84,8 @@ set(BLUEWAKE_HOST_SOURCES
     ${BLUEWAKE_HOST_SRC}/forest_water.c
     ${BLUEWAKE_HOST_SRC}/audio_watch.c
     ${BLUEWAKE_HOST_SRC}/mouse_camera.c
-    ${BLUEWAKE_HOST_SRC}/save_state.c)
+    ${BLUEWAKE_HOST_SRC}/save_state.c
+    ${BLUEWAKE_HOST_SRC}/hd_look.c)
 # The shell (the touch controls and the ⋯ menu) is the iPhone app's, so the
 # desktop options menu (settings_menu.cpp) is left out, as on iOS.
 set(BLUEWAKE_IOS_SRC ${BLUEWAKE_REPO_ROOT}/apple/ios/src)

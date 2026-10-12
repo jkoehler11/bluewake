@@ -9,7 +9,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 REPO = Path("/home/james/nfs/Projects/bluewake")
-PREPARED = Path("/home/james/bw-build-android/prepared-lean")
+PREPARED = Path("/home/james/bw-build-android/prepared-behaviour")
 OUT = Path("/home/james/bw-build-android")
 SDK = Path("/home/james/android-sdk")
 NDK = SDK / "ndk/android-ndk-r30"
