@@ -87,9 +87,31 @@ printed the fields: same program counter, the rest of the CPU state and all memo
 `cycle_observation_suffix` differs (1 against 2), the bookkeeping value lean memory leaves stale on the RAM path,
 which nothing reads there. Every checkpoint after it matches again.
 
-**On Apple builds it doesn't link with training yet.** The instrumented module for local training is too large for
-Apple's linker: `B/BL out of range (max is +/-128MB)` after "branch islands: maximum cluster count reached". The
-module without instrumentation links. Windows and Linux (x86) aren't affected; Android uses a different linker.
+**On Apple builds it didn't link with training** (fixed October 12, below). The instrumented module for local
+training was too large for Apple's linker: `B/BL out of range (max is +/-128MB)` after "branch islands: maximum
+cluster count reached". The module without instrumentation links. Windows and Linux (x86) aren't affected; Android
+uses a different linker.
+
+**The fix: train at `-O1` with lean memory.** Training compiles its instrumented module at `-O0`, the quickest
+compile; the counters are the same at any level. With lean memory that module has 2.4 GB of code, out of reach of
+the linker's branch islands. At `-O1` it has 822 MB and links with no warning. The Mac builder now asks for `-O1`
+when `--lean-memory` is on (`train_local_pgo.py --instrumented-opt-level 1`). Training takes about as long: on this
+Mac (16 cores) the instrumented compile grows from about 4 to about 28 minutes, and the training runs shrink from
+about 31 to 3.5 minutes, because the instrumented game runs faster (31.5 minutes in all, against 35 for the lean
+build at `-O0`). A Mac with fewer cores pays more for the compile, so the other builds keep `-O0`.
+
+A complete build with `--combined-optimizations --lean-blocks --lean-memory --lean-deadlines` took 57 minutes and
+compared with the trained lean build (`--lean-blocks` alone), both trained, alternated, three runs each after a
+cold first pair:
+
+| | Lean blocks, trained | + lean memory + lean deadlines, trained | |
+| --- | --- | --- | --- |
+| The sea by Outset | 22.36, 22.35, 22.27 s | 20.93, 20.98, 20.88 s | 6.3% faster |
+| Dragon Roost Cavern | 14.12, 14.22, 14.12 s | 13.11, 13.14, 13.08 s | 7.4% faster |
+| Module | 433.0 MB | 450.5 MB | +4% |
+
+Same blocks, and the same memory, cycles and aliases at every checkpoint. The trained gain is smaller than the two
+steps' untrained gains added up (about 9 to 11%), as the training already speeds up some of what they remove.
 
 ## S2, fix 2: lean deadlines (October 12)
 
@@ -143,3 +165,85 @@ Outset 23.94 s against 23.90 s, the cavern 14.90 s against 14.96 s (four runs ea
 question itself (the overlap watch's reads and the address tests), not the trip into the host. Making it cheaper
 means asking less often: for example, a host that reads the overlap phase once per turn, which changes when the host
 reacts, so it is Chris's call.
+
+## S2, fix 3: the lazy overlap watch (October 12)
+
+A profile of the trained build with lean memory and lean deadlines put `host_direct_can_skip` at 7% of the game
+thread's busy samples, and LiquidAzir's on the Fold 7 at 10.7 M instructions a retrace, with the module's
+`bw_direct_call_ready` at 7 M (#93). Answering the same question inside the module saved nothing (above): the cost
+is the question itself, mostly the scene overlap watch, which reads the overlap object at `0x803F6160` and its
+phase from guest memory at every direct call and block edge.
+
+That watch only records the phase in `g_overlap_last_phase` and `g_overlap_terminal_phase`, which nothing but the
+diagnostics and the test routes read (frame captures, player traces, scripted pad pulses, the route probes). The
+game never sees it. `BLUEWAKE_LAZY_OVERLAP=1` (off by default) leaves it to the edge service and the per-turn
+sample, which already read it, and drops it from the per-call checks. With that, the host's answer depends on the
+address alone, so a module that has `bluewake_composite_direct_calls_v3` (new) reads it inline: the jump button and
+the diagnostics as one flag the host keeps current, plus the four addresses and ranges the host watches whatever
+their features' switches. `BLUEWAKE_DIRECT_SKIP_VERIFY=1` asks the host as well and counts disagreements.
+
+Lean blocks, lean memory and lean deadlines, no training profile, the same host, alternated, three runs each after
+the first pair:
+
+| | Off | `BLUEWAKE_LAZY_OVERLAP=1` | |
+| --- | --- | --- | --- |
+| The sea by Outset | 22.96, 22.85, 22.95 s | 21.98, 22.01, 22.07 s | 3.9% faster |
+| Dragon Roost Cavern | 13.89, 13.92, 14.02 s | 13.32, 13.33, 13.23 s | 4.7% faster |
+
+**It plays the same.** The module answered every direct call inline (440,598,355 at Outset, 267,599,471 in the
+cavern), and the verify mode found no disagreement with the host either way. Checkpoints are identical, and
+identical with the switch off to the lean deadlines module's. Since the watch matters only while scenes change
+over, four boots from the title through the file select and a scene handover into Outset, Windfall, Dragon Roost
+Cavern and the Tower of the Gods, with a checkpoint every 100 retraces, are identical off and on (the inline answer
+is off with the stage select, so those runs check the lazy watch alone).
+
+The first version answered inline only before the name scene and so never in play; a second read the overlap
+watch through pointers to the host's variables and agreed on every call but was no faster.
+
+## Measured, not proposed: the floating-point helpers inline (October 12)
+
+The trained module keeps 528 out-of-line copies of `inline_fp.h`'s helpers, so every `fmuls` or `fadds` pays a call.
+Forcing them inline (`always_inline`, local branch `codex/fp-always-inline`) gave a module 11.5% larger and slower:
+Outset 22.66 s against 22.94 s (1.2%), the cavern 13.86 s against 14.20 s (2.4%), checkpoints identical. The calls
+cost less than the code they would add.
+
+## S2, fix 4 (waiting on Chris): the alias resolver's last hit (October 12)
+
+`ppc_guest_alias_resolve` (RecompCore `GXRuntime/src/core/cpu.c`) was 2.2% of the trained build's game thread: a
+binary search over about 1,900 aliases on every access to an actor module's data. It now tries the alias it found
+last first. While no two aliases overlap (the only case that takes the search), at most one can hold an access, so a
+remembered alias that holds it is the one the search would find; any other answer goes to the search as before. The
+index is a relaxed atomic, not thread-local (a thread-local in a Mach-O dylib costs a call per access); a stale one
+is only a miss.
+
+With `BLUEWAKE_LAZY_OVERLAP=1` on both, the same host and sources, alternated, three runs each after a cold first
+pair: Outset 21.89 s against 21.79 s (0.5%), Dragon Roost Cavern 13.20 s against 13.03 s (1.2%), every run faster,
+identical checkpoints. It is a RecompCore change, on for everyone once pinned, so it waits for Chris: the commit is
+`f4afb6f` on a local branch `codex/alias-last-hit` of the benchmark checkout's RecompCore, on the pinned `ddd031b`.
+Not pushed; a RecompCore pull request and a BlueWake pin follow if Chris says yes.
+
+## Everything together (October 12)
+
+The lean blocks build (what 0.7.0 ships to PCs) against lean memory, lean deadlines, the lazy overlap watch
+(`BLUEWAKE_LAZY_OVERLAP=1`) and the alias resolver's last hit, all four on. Untrained modules from the same prepared
+sources, the same host, alternated, three runs each after the first pair:
+
+| | Lean blocks | All four | Time | Retraces a second |
+| --- | --- | --- | --- | --- |
+| The sea by Outset | 25.15, 25.04, 25.00 s | 21.87, 21.73, 21.68 s | 13.2% less | 15% more |
+| Dragon Roost Cavern | 15.71, 15.56, 15.64 s | 13.13, 12.99, 13.06 s | 16.5% less | 20% more |
+
+Same blocks, and the same memory, cycles and aliases at every checkpoint (the CPU differs only in
+`cycle_observation_suffix`, as with each step). On a CPU where the game thread sets the frame rate (the Steam Deck,
+the Fold 7, a 2-core laptop), that is the size of the change to expect if it carries over from ARM on a Mac, which
+only those machines can show.
+
+What the game thread spends after these (the same Outset sample, all four on): the module's per-call check
+`bw_direct_call_ready` 6.1% (two per direct call: the interrupt sources through four host pointers, the cycle budget
+and the inline answer); the memory and register helpers 6.5%; the dispatcher 3.3%; the floating-point helpers about
+6% together; the host's per-call checks down to 2.6% from 9.7%. The next cut in the per-call check is the host
+keeping one "interrupt pending" byte current, which needs a RecompCore change (`interrupts.c` writes the PI
+registers), so it waits with the alias change for Chris.
+Another RecompCore one: `bw_inline_gpr_memory_ready` (1.5%, `inline_gpr.h`) checks each of up to 18 saved
+registers' words with `get_ram_ptr`, so each inline register save or restore asks the alias resolver up to 18
+times; one "does any alias overlap this span" query from `cpu.c`'s sorted index would answer for the whole frame.

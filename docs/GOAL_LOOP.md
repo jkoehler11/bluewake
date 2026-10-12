@@ -50,6 +50,38 @@ The full reasoning is in [PERFORMANCE.md](PERFORMANCE.md#the-plan). In short:
 - **A new release gate (Chris):** before announcing a release PadMint builds on a Mac, PadMint's
   `scripts/player-check.sh` passes, on the clean checkout before tagging and again after publishing.
 
+## The plan from October 12 (Chris's decisions)
+
+People compare BlueWake with the Wind Waker HD recomp (ZeldaWWHDRecomp), which ships ready-made builds for Windows,
+Mac, Linux and Android without game code, builds the game on first start in about two minutes, and reports about
+4 ms of CPU a frame. Players want that quality from BlueWake on every platform, Windows, Linux, Android, iPhone and
+iPad alike. Chris decided:
+
+- **Speed on by default** (#277): lean memory and lean deadlines in the Windows and Linux builders, the lazy overlap
+  watch in the app. 13 to 16.5% less game-thread time on the Mac, the same game state.
+- **A "game-behaviour timing" prototype, behind a switch.** The HD recomp is fast because it reproduces the game's
+  behaviour, not the console's cycle timing: one copy of each block, no per-instruction bookkeeping. A translation
+  mode that does the same here, measured for speed, build time and whether audio and cutscenes hold. If it holds, it
+  is also what makes a first-start build in minutes possible ([DIRECTION.md](DIRECTION.md)).
+- **The HD look, rebuilt by us**, cheapest first, each an option with the same menu on every platform, off by
+  default where the GPU is small. Elliott's October 3 video ("I Backported All The Zelda Wind Waker HD Features to the
+  Gamecube Recompile") shows a Wind Waker HD / GameCube switch, sun shadows, cloud shadows on the sea, edge light on
+  characters, ambient occlusion, bloom, HD's far-distance blur, light from torches and distant islands drawn 100,000
+  units farther, with the HD menus and HUD. None of it is in a public branch; only the texture importer is (and is
+  in BlueWake). Chris sends him one last request in parallel.
+- **0.8.0 waits for the HD look** (with the Linux AppImage and the speed defaults).
+
+| # | Step | Notes |
+| --- | --- | --- |
+| H1 | HD textures and HUD from your own Wii U dump, chosen in the app's setup, not only by `scripts/import_wwhd_textures.py`; what breaks with a pack fixed (the sea chart, #263: the cache-flush fallback on by default is Chris's call) | #57 asks for the HD UI |
+| H2 | **Distant islands.** The island LOD actor (`d_a_lod_bg.cpp`) shows an island's far model within `scale.x` (its placed scale times 20,000 units), sinks it below the sea past 150,000 and draws with the far plane at 500,000. An option that moves those out, as a host feature on the actor (like Forest Water) | Game-side, no renderer change; the cheapest |
+| H3 | Bloom and the far-distance blur, as passes after the frame in Aurora | RecompCore |
+| H4 | Ambient occlusion from the depth buffer | RecompCore |
+| H5 | Cloud shadows on the sea | RecompCore |
+| H6 | Sun shadows over the whole scene, edge light on characters, light from torches and fires | The hardest: needs the scene drawn from the sun |
+| H7 | The Wind Waker HD / GameCube switch that sets them together | Every platform's menu |
+| T1 | The game-behaviour timing prototype | A switch, measured like every other step |
+
 ## Now: the speed sprint (from October 11)
 
 **Goal:** BlueWake measurably faster where the CPU is the limit: the Steam Deck, Android phones, two- and four-core
@@ -66,13 +98,15 @@ Chris decides every default change, any merge that changes how the game runs, th
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
 | S1 | **Done October 11 ([record](status/SPEED_PROFILE_2026-10-11.md)): about a quarter of the CPU time is the game's own work; the rest is the program counter and cycle observation around memory instructions, the dispatcher, exact floating point and the host's per-call checks.** Measure where the game thread's time goes, on this Mac's ARM build with the PC builds' preparations and lean blocks (`--combined-optimizations --lean-blocks`, #257): headless, unpaced, from save states at Outset, the bird scene and Dragon Roost Cavern; a CPU profile split into game work, per-instruction bookkeeping, memory access, the host's per-call checks and the renderer's writes. | Codex | A table in [PERFORMANCE.md](PERFORMANCE.md#results) that ranks the shares |
-| S2 | **Fix 1 measured October 12: `--lean-memory` (already in the Windows and Linux builders) is about 5.5 to 6% faster on this Mac and plays the same; contributors asked for x86, Deck and phone numbers; turning it on by default is Chris's decision. On Apple it needs the training link fixed first. Fix 2, October 12: `--lean-deadlines` (new, opt-in in all three builders) is 3.7 to 4.9% faster again, with the same game state; the module is 8.5% larger. The host's per-call checks answered inline in the module: no gain, so not proposed ([record](status/SPEED_PROFILE_2026-10-11.md)).** Remove the biggest share first, from S1's ranking: (1) the program counter, the cycle observation and the deadline check only on the path that leaves RAM; (2) the host's per-call checks as one inline flag; (3) MSR[FP] checked once per block; (4) fewer dispatches; (5) a last-hit cache for alias lookups. Earlier list: the host's per-call checks become one flag the module reads inline (row 0 below); the memory fast path checks one "slow memory" flag instead of aliases, reservation and write journal separately (RecompCore `cpu.h`); the lean copies write the program counter and the observation value only where an instruction can observe them; the game's registers stay in locals inside a block. | Codex | Each: a switch, matching checkpoints at three states, a "Results" row on the Mac and one from a contributor's PC or phone |
-| S3 | **Apple builds with the PC preparations** (PRIORITIES row 6): the same states on a plain Mac build and a prepared one. | Codex | Numbers recorded; Chris decides the default |
+| S2 | **Fix 1 measured October 12: `--lean-memory` (already in the Windows and Linux builders) is about 5.5 to 6% faster on this Mac and plays the same; contributors asked for x86, Deck and phone numbers; turning it on by default is Chris's decision. On Apple it needs the training link fixed first. Fix 2, October 12: `--lean-deadlines` (new, opt-in in all three builders) is 3.7 to 4.9% faster again, with the same game state; the module is 8.5% larger. The host's per-call checks answered inline in the module: no gain alone. Fix 3: `BLUEWAKE_LAZY_OVERLAP=1` takes the scene overlap watch, which only diagnostics read, out of those checks, and then the inline answer pays: 3.9 to 4.7% faster, same game state ([record](status/SPEED_PROFILE_2026-10-11.md)). All of them together (with the alias resolver's last hit, waiting on Chris) against lean blocks: 13.2% less game-thread time at Outset and 16.5% in Dragon Roost Cavern, untrained, same game state.** Remove the biggest share first, from S1's ranking: (1) the program counter, the cycle observation and the deadline check only on the path that leaves RAM; (2) the host's per-call checks as one inline flag; (3) MSR[FP] checked once per block; (4) fewer dispatches; (5) a last-hit cache for alias lookups. Earlier list: the host's per-call checks become one flag the module reads inline (row 0 below); the memory fast path checks one "slow memory" flag instead of aliases, reservation and write journal separately (RecompCore `cpu.h`); the lean copies write the program counter and the observation value only where an instruction can observe them; the game's registers stay in locals inside a block. | Codex | Each: a switch, matching checkpoints at three states, a "Results" row on the Mac and one from a contributor's PC or phone |
+| S3 | **Apple builds with the PC preparations** (PRIORITIES row 6): the same states on a plain Mac build and a prepared one. **October 12: the trained Mac build with lean memory and lean deadlines links now (training at `-O1`) and is 6.3 to 7.4% faster than the trained lean build** ([record](status/SPEED_PROFILE_2026-10-11.md)). Still to do: the plain Mac build in the same table, and an iPad. | Codex | Numbers recorded; Chris decides the default |
 | S4 | **Prepare the next release in parallel,** without deciding it: what is in `main` since 0.7.0, its checks, and the Linux AppImage as the headline. **Draft: [RELEASE_NEXT_DRAFT_2026-10-11.md](status/RELEASE_NEXT_DRAFT_2026-10-11.md).** | Codex prepares; Chris decides | A release record ready for Chris |
 
 Waiting on Chris: whether Android (#93) merges as experimental below full speed, and when to freeze the release.
 
 ## Next: the next release (S4)
+
+**October 12: 0.8.0 waits for the HD look (Chris), with the Linux AppImage and the speed defaults.**
 
 Not dated yet. It carries #242, #210, #243, #247, #248, #250, #252 and #257, plus whatever of row 0 below is ready ([the draft record](status/RELEASE_NEXT_DRAFT_2026-10-11.md)). Before the freeze: the
 468-place sweep on the candidate (row 8), Forest Haven played with fusion on Linux, the Linux AppImage from a
