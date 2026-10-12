@@ -11,7 +11,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 REPO = Path("/home/james/nfs/Projects/bluewake")
-PREPARED = Path("/home/james/bw-build-android/prepared")
+PREPARED = Path("/home/james/bw-build-android/prepared-lean")
 OUT = Path("/home/james/bw-build-android")
 SDK = Path("/home/james/android-sdk")
 NDK = SDK / "ndk/android-ndk-r30"
@@ -28,6 +28,18 @@ APP_ID = "dev.bluewake.BlueWake"
 MIN_SDK = 33
 TARGET_SDK = 35
 CPU = "cortex-a78"
+
+def apk_filename(variant):
+    """Versioned APK filename: WindWakerRecomp-<variant>-<sha8>-<HHMMSS>.apk"""
+    import datetime
+    try:
+        sha = subprocess.check_output(["git", "-C", str(REPO), "rev-parse", "--short=8", "HEAD"],
+                                      text=True).strip()
+    except Exception:
+        sha = "unknown"
+    ts = datetime.datetime.now().strftime("%H%M%S")
+    return f"WindWakerRecomp-{variant}-{sha}-{ts}.apk"
+
 def default_jobs():
     try:
         with open("/proc/meminfo") as m:
@@ -231,7 +243,7 @@ def package():
                              "-storepass", "android", "-keypass", "android", "-alias", "androiddebugkey",
                              "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
                              "-dname", "CN=Android Debug,O=Android,C=US"])
-    apk_out = OUT / "WindWakerRecomp.apk"
+    apk_out = OUT / apk_filename("untrained")
     run("apk-sign", [BT / "apksigner", "sign", "--ks", str(keystore),
                      "--ks-pass", "pass:android", "--out", str(apk_out), str(aligned)])
 
@@ -251,7 +263,7 @@ def package():
 def install():
     log("installing on Waydroid over adb")
     remote = f"/sdcard/Android/data/{APP_ID}/files"
-    apk = OUT / "WindWakerRecomp.apk"
+    apk = sorted(OUT.glob("WindWakerRecomp-untrained-*.apk"))[-1]
     game = PREPARED / "game"
     iso = PREPARED / "BlueWake/game/GZLE01.iso"
 

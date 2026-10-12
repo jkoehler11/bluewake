@@ -4,7 +4,7 @@
 # Reads: correctness, game FPS, GX worker busy%, and thermal (core freq).
 set -u
 S=/home/james/android-sdk/platform-tools/adb
-SERIAL=100.106.76.98:36289
+SERIAL=192.168.86.234:41083
 FILES=/sdcard/Android/data/dev.bluewake.BlueWake/files
 LOG_DIR=/home/james/bw-fusion-ab
 

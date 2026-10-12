@@ -9,7 +9,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape
 
 REPO = Path("/home/james/nfs/Projects/bluewake")
-PREPARED = Path("/home/james/bw-build-android/prepared")
+PREPARED = Path("/home/james/bw-build-android/prepared-lean")
 OUT = Path("/home/james/bw-build-android")
 SDK = Path("/home/james/android-sdk")
 NDK = SDK / "ndk/android-ndk-r30"
@@ -18,7 +18,7 @@ BT = SDK / "build-tools/android-15"
 PLATFORM_JAR = SDK / "platforms/android-36/android.jar"
 ADB = SDK / "platform-tools/adb"
 TOOLCHAIN = NDK / "build/cmake/android.toolchain.cmake"
-SERIAL = "100.106.76.98:36289"
+SERIAL = "192.168.86.234:41083"
 
 MODULE = "libgGZLE01_recomp.so"
 MODULE_SRC = "gGZLE01_recomp.so"
@@ -27,6 +27,18 @@ ACTIVITY = "dev.bluewake.android.BlueWakeActivity"
 MIN_SDK = 33
 TARGET_SDK = 35
 CPU = "cortex-a78"
+
+def apk_filename(variant):
+    """Versioned APK filename: WindWakerRecomp-<variant>-<sha8>-<HHMMSS>.apk"""
+    import datetime
+    try:
+        sha = subprocess.check_output(["git", "-C", str(REPO), "rev-parse", "--short=8", "HEAD"],
+                                      text=True).strip()
+    except Exception:
+        sha = "unknown"
+    ts = datetime.datetime.now().strftime("%H%M%S")
+    return f"WindWakerRecomp-{variant}-{sha}-{ts}.apk"
+
 DEVICE_FILES = f"/sdcard/Android/data/{APP_ID}/files"
 
 TRAINING_RETRACES = 23000
@@ -70,7 +82,7 @@ def default_jobs():
             for line in m:
                 if line.startswith("MemAvailable:"):
                     avail = int(line.split()[1]) * 1024
-                    return max(1, min(os.cpu_count() or 8, int(avail // (2.0 * 2**30))))
+                    return max(1, min(os.cpu_count() or 8, int(avail // (1.5 * 2**30))))
     except OSError:
         pass
     return os.cpu_count() or 8
@@ -270,8 +282,8 @@ def playback_one(name, mods):
 
 
 def phase_instrumented():
-    log("== instrumented module (-O0 + -fprofile-instr-generate) ==")
-    mod = compile_composite(OUT / "composite-instr", "0",
+    log("== instrumented module (-O1 + -fprofile-instr-generate) ==")
+    mod = compile_composite(OUT / "composite-instr", "1",
                             ["-fprofile-instr-generate"], ["-fprofile-instr-generate"],
                             "instr",
                             extra_cmake=[f"-DCOMPOSITE_EXTRA_SOURCES={REPO / 'android/src/profile_flush.c'}"])
@@ -283,7 +295,7 @@ def phase_train_apk():
     mod = OUT / "composite-instr" / MODULE_SRC
     if not mod.exists():
         raise SystemExit("run instrumented first")
-    apk = package(mod, "training.apk", "apk-training", True, "train")
+    apk = package(mod, apk_filename("training-instr"), "apk-training", True, "train")
     adb("push", apk, "/data/local/tmp/training.apk", timeout=1800)
     adb("shell", "pm", "install", "-r", "-g", "/data/local/tmp/training.apk", timeout=1800)
     adb("shell", "rm", "-f", "/data/local/tmp/training.apk")
@@ -321,7 +333,7 @@ def phase_final_apk():
     mod = OUT / "composite-pgo" / MODULE_SRC
     if not mod.exists():
         raise SystemExit("run optimized first")
-    apk = package(mod, "WindWakerRecomp-pgo.apk", "apk", False, "final")
+    apk = package(mod, apk_filename("pgo"), "apk", False, "final")
     adb("push", apk, "/data/local/tmp/final.apk", timeout=1800)
     adb("shell", "pm", "install", "-r", "-g", "/data/local/tmp/final.apk", timeout=1800)
     adb("shell", "rm", "-f", "/data/local/tmp/final.apk")
