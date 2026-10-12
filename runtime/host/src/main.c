@@ -33,6 +33,7 @@
 #include "edge_intercepts.h"
 #include "game_options.h"
 #include "forest_water.h"
+#include "hd_look.h"
 #include "fast_load.h"
 #include "fps_watch.h"
 #include "jump_button.h"
@@ -833,17 +834,23 @@ static void host_mods_enable(void* lib, CPUState* cpu) {
         if (on && strcmp(mod, "betterww") == 0)
             g_options_mod = true;
     }
-    // The two widescreen mods patch the same code for different shapes; the
-    // composite has no variant for both. 16:10 wins over 16:9 if asked for both.
-    int ws169 = -1, ws1610 = -1;
-    for (u32 i = 0; i < available && name != NULL; ++i) {
-        const char* mod = name(i);
-        if (mod != NULL && strcmp(mod, "widescreen") == 0) ws169 = (int)i;
-        if (mod != NULL && strcmp(mod, "widescreen1610") == 0) ws1610 = (int)i;
-    }
-    if (ws169 >= 0 && ws1610 >= 0 && (g_mod_mask & (1u << ws169)) && (g_mod_mask & (1u << ws1610))) {
-        fprintf(stderr, "[mods] widescreen and widescreen1610 are exclusive; keeping widescreen1610\n");
-        g_mod_mask &= ~(1u << ws169);
+    // The widescreen mods patch the same code for different shapes; the
+    // composite has no variant for two of them. If asked for more than one,
+    // the first of these is kept: 21:9, then 16:10, then 16:9.
+    static const char* const kWidescreens[] = {"widescreen219", "widescreen1610", "widescreen"};
+    const char* kept = NULL;
+    for (size_t w = 0; w < sizeof kWidescreens / sizeof kWidescreens[0]; ++w) {
+        for (u32 i = 0; i < available && name != NULL; ++i) {
+            const char* mod = name(i);
+            if (mod == NULL || strcmp(mod, kWidescreens[w]) != 0 || !(g_mod_mask & (1u << i)))
+                continue;
+            if (kept == NULL) {
+                kept = mod;
+            } else {
+                fprintf(stderr, "[mods] %s and %s are exclusive; keeping %s\n", kept, mod, kept);
+                g_mod_mask &= ~(1u << i);
+            }
+        }
     }
     for (u32 i = 0; i < available && name != NULL; ++i) {
         const char* mod = name(i);
@@ -5224,6 +5231,7 @@ static void host_sync_vi_cycles(CPUState* cpu) {
         bluewake_fps_watch_retrace();
         bluewake_fast_load_retrace(bluewake_host_thread_cpu_us());
         bluewake_quick_doors_retrace();
+        bluewake_hd_look_retrace(cpu);
         bluewake_haptics_retrace();
         if (g_wall_pace_enabled && !bluewake_fast_load_fast_forward())
             host_wall_pace(g_host_retrace_count);
@@ -6209,8 +6217,8 @@ static bool host_bundle_defaults(char* module, size_t module_size) {
 #endif
 }
 
-/* BLUEWAKE_ASPECT: the picture's shape. 4:3 is the game's own; 16:10 and 16:9
-   turn on the matching widescreen mod (a wider camera, culling and HUD) and
+/* BLUEWAKE_ASPECT: the picture's shape. 4:3 is the game's own; 16:10, 16:9 and
+   21:9 turn on the matching widescreen mod (a wider camera, culling and HUD) and
    ask the renderer for a frame buffer of that shape (DOL_AURORA_ASPECT_RATIO),
    which also sizes the window unless DOL_AURORA_WINDOW does. Explicit
    BLUEWAKE_MODS or DOL_AURORA_ASPECT_RATIO settings are kept. */
@@ -6226,8 +6234,15 @@ static void host_apply_aspect(void) {
     } else if (strcmp(aspect, "16:9") == 0) {
         mod = "widescreen";
         ratio = "1.7778";
+    } else if (strcmp(aspect, "21:9") == 0) {
+        mod = "widescreen219";
+        ratio = "2.3333";
+        // The picture is as tall as 4:3's (the camera widens, it does not
+        // look further up or down): the follow camera starts a little
+        // further back, as one notch of the wheel out would put it.
+        setenv("BLUEWAKE_CAMERA_DISTANCE", "1.12", 0);
     } else {
-        fprintf(stderr, "[aspect] unknown BLUEWAKE_ASPECT=%s (4:3, 16:10 or 16:9); keeping 4:3\n", aspect);
+        fprintf(stderr, "[aspect] unknown BLUEWAKE_ASPECT=%s (4:3, 16:10, 16:9 or 21:9); keeping 4:3\n", aspect);
         return;
     }
     setenv("DOL_AURORA_ASPECT_RATIO", ratio, 0);
@@ -8057,6 +8072,7 @@ int main(int argc, char** argv) {
         host_rel_section_linked_start(mod, 317u, 1u));
     host_skip_fast_refresh();  // Forest Water's tree-timer address
     bluewake_forest_water_reload();
+    bluewake_hd_look_reload();
     bluewake_mouse_camera_attach(&cpu);
     bluewake_climb_attach(&cpu);
     bluewake_jump_button_attach(&cpu);
