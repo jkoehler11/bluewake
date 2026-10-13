@@ -18,7 +18,7 @@ BT = SDK / "build-tools/android-15"
 PLATFORM_JAR = SDK / "platforms/android-36/android.jar"
 ADB = SDK / "platform-tools/adb"
 TOOLCHAIN = NDK / "build/cmake/android.toolchain.cmake"
-SERIAL = "192.168.86.234:41083"
+SERIAL = "100.106.76.98:39863"
 
 MODULE = "libgGZLE01_recomp.so"
 MODULE_SRC = "gGZLE01_recomp.so"
@@ -79,6 +79,9 @@ def _android_args():
 
 
 def default_jobs():
+    forced = os.environ.get("BW_JOBS")
+    if forced and forced.isdigit():
+        return int(forced)
     try:
         with open("/proc/meminfo") as m:
             for line in m:
@@ -335,7 +338,7 @@ def phase_final_apk():
     mod = OUT / "composite-pgo" / MODULE_SRC
     if not mod.exists():
         raise SystemExit("run optimized first")
-    apk = package(mod, apk_filename("pgo"), "apk", False, "final")
+    apk = package(mod, apk_filename("pgo-behaviour"), "apk", False, "final")
     adb("push", apk, "/data/local/tmp/final.apk", timeout=1800)
     adb("shell", "pm", "install", "-r", "-g", "/data/local/tmp/final.apk", timeout=1800)
     adb("shell", "rm", "-f", "/data/local/tmp/final.apk")
