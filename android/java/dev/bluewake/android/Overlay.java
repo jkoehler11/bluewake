@@ -112,7 +112,7 @@ final class Overlay extends FrameLayout implements TouchControlsView.Listener, M
         launchRatio = settings.bool(Settings.MOD_WIDESCREEN_1610, false) ? 1.6f
                 : settings.bool(Settings.MOD_WIDESCREEN, false) ? 16f / 9f : 4f / 3f;
         for (String key : new String[] {Settings.MOD_WIDESCREEN, Settings.MOD_WIDESCREEN_1610,
-                Settings.MOD_HD_TEXTURES, Settings.MOD_BETTERWW})
+                Settings.MOD_HD_TEXTURES, Settings.MOD_BETTERWW, Settings.HD_LOOK})
             launchMods.put(key, settings.bool(key, false));
 
         touch = new TouchControlsView(activity, settings);
@@ -790,7 +790,10 @@ final class Overlay extends FrameLayout implements TouchControlsView.Listener, M
                 n += countTextures(f);
             } else {
                 String name = f.getName().toLowerCase(Locale.US);
-                if (name.endsWith(".png") || name.endsWith(".dds")) n++;
+                // Each texture once: its extra mip levels (name_mip1.png...) belong to it, as the iPhone app and
+                // the desktop menus count (runtime/host/src/texture_pack_menu.h).
+                if ((name.endsWith(".png") || name.endsWith(".dds"))
+                        && !name.substring(0, name.length() - 4).contains("_mip")) n++;
             }
         }
         return n;
@@ -800,16 +803,18 @@ final class Overlay extends FrameLayout implements TouchControlsView.Listener, M
         int pack = countPackFiles();
         String packDetail = pack > 0 ? pack + " textures installed" : "No pack installed yet";
         List<MenuView.Item> children = new ArrayList<>();
+        // Wind Waker HD textures first, as in the iPhone app and the desktop menus (#314).
+        children.add(MenuView.Item.inline("Wind Waker HD Textures", new ArrayList<>(Arrays.asList(
+                modToggle("HD Textures", packDetail, Settings.MOD_HD_TEXTURES),
+                action("Install Texture Pack…", data::chooseTexturePack)
+                        .subtitle("Pick a folder of PNG or DDS textures")))));
         children.add(MenuView.Item.inline(new ArrayList<>(Arrays.asList(
                 modToggle("Widescreen 16:9", "Shows more of the world on wide screens", Settings.MOD_WIDESCREEN),
                 modToggle("Widescreen 16:10", "For 16:10 screens, such as a tablet", Settings.MOD_WIDESCREEN_1610),
-                modToggle("HD Texture Pack", packDetail, Settings.MOD_HD_TEXTURES),
-                modToggle("Better Wind Waker", "Swift Sail, instant text and more", Settings.MOD_BETTERWW)))));
+                modToggle("Better Wind Waker", "Swift Sail, instant text and more", Settings.MOD_BETTERWW),
+                modToggle("Wind Waker HD Look", "Far islands, shading, cloud shadows, bloom", Settings.HD_LOOK)))));
         MenuView.Item bww = betterWWSettingsMenu();
         if (bww != null) children.add(bww);
-        children.add(MenuView.Item.inline(new ArrayList<>(Arrays.asList(
-                action("Install Texture Pack…", data::chooseTexturePack)
-                        .subtitle("Pick a folder of PNG or DDS textures")))));
         return MenuView.Item.menu("Mods", children);
     }
 
@@ -870,7 +875,8 @@ final class Overlay extends FrameLayout implements TouchControlsView.Listener, M
             settings.remapReset();
             settings.applyNow();
         }));
-        return menu("Controller", camera, MenuView.Item.menu("Button Mapping", remaps));
+        return menu("Controller", camera, MenuView.Item.menu("Button Mapping", remaps),
+                controllerToggle("D-pad in Items and Quest Status", Settings.DPAD_MENUS));
     }
 
     private MenuView.Item controllerToggle(String title, String key) {

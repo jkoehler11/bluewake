@@ -77,5 +77,48 @@ The game state is not identical, by design: an event can land a block later. Wha
 - The sound: the audio the game produces over each 2,400-retrace run, captured with `BLUEWAKE_CAPTURE_AUDIO_WAV`, is
   identical sample for sample at both places.
 
-Not checked: played by hand, a PC, the Deck, a phone, a trained build, and long runs (cutscenes with their sound in
-time, a save made and loaded).
+## On x86 (pdale-boop, October 12, #215)
+
+Trained Linux builds from one commit (a3ee3ff), the default lean blocks, lean memory and lean deadlines, one also with
+`--behaviour-timing`; clang 23.1.1, `-march=x86-64-v3`. Headless from save states, 2,400 retraces, three alternated
+rounds, median retraces a second with the pace off:
+
+| | Outset | Bird scene | Tower |
+| --- | --- | --- | --- |
+| Intel i5-6500 (the same Debian app, only the module swapped) | +7.1% | +9.3% | +7.6% |
+| i5-12600KF, its four E-cores | +8.1% | +8.4% | +8.0% |
+| i5-12600KF, its P-cores | +9.5% | +10.6% | +10.1% |
+
+Faster in all 27 pairs; 6.6 to 7.8% fewer instructions, the same instructions per cycle, 5 to 7% fewer L1 instruction
+cache misses. The module's code 476 MB to 406 MB (15% smaller), its compile 18 min 12 s to 12 min 15 s.
+
+## On an iPad Pro (M2), October 12
+
+Two personal iOS builds from the same commit, both trained, with `--combined-optimizations --lean-blocks --lean-memory
+--lean-deadlines`, one also with `--behaviour-timing` (401,618 block starts always prepaid). The same copied test
+cards, scripted presses and 7,200 retraces; the game thread's share of each frame (median of 85 samples):
+
+| | Installed 0.7.0 build | Prepared | Prepared, behaviour timing |
+| --- | --- | --- | --- |
+| The sea by Outset | 81% | 54% | 52% |
+| Dragon Roost Cavern | 53% | 43% | 41% |
+
+59.9 retraces a second in every run, no crash, no thermal warning, and the player's own save unchanged throughout. On the
+iPad, behaviour timing takes about 4 to 5% of what is left, less than on the Mac.
+
+Not checked: played by hand, a PC, the Deck, a phone, and long runs (cutscenes with their sound in time, a save made and
+loaded).
+
+## October 13 and 14: other machines, and the default
+
+Measured by contributors, each with both builds made from the same commit:
+
+| Machine | Who | Result |
+| --- | --- | --- |
+| Intel i5-6500 and i5-12600KF, Linux | pdale-boop (#215) | 7 to 9% and 8 to 11% faster, all 27 pairs; module 15% smaller |
+| Steam Deck (SteamOS 3.8, 4 cores) | jkoehler11 (#215) | 63.6 to 69.4 retraces a second at Outset's sea (9%), three interleaved rounds each; module 518 to 444 MB |
+| Galaxy Z Fold 7 (Android) | LiquidAzir (#93) | 4% fewer instructions and 10% fewer cycles a retrace at Outset's pier; module 10.5% smaller |
+
+Played with it: pdale-boop on Linux at 21:9 and 60 FPS, and jkoehler11 on the Deck (a cutscene with music, and sailing).
+Neither noticed anything look or sound different. On that evidence the Windows and Linux builders turn it on by default
+from October 14; `--no-behaviour-timing` builds without it. The Mac, iPhone and iPad builder keeps it opt-in.

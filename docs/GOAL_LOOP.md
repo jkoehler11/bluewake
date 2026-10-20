@@ -1,7 +1,8 @@
 # What we're doing
 
 The dated plan. Ask "what are we doing on October 11?" and the answer is that day's section below. Owner: Chris.
-Updated October 11, 2026 (night).
+Updated October 15, 2026. Earlier dated sections are snapshots; the newest section and [PRIORITIES.md](PRIORITIES.md)
+give the current work and remaining gates.
 
 **The aim for the next versions:** BlueWake runs faster and steadier, the bugs players reported are fixed, Linux
 becomes a download, and Android gets to the iPhone app's standard. Most of the speed is already written, by Elliott
@@ -30,6 +31,166 @@ The full reasoning is in [PERFORMANCE.md](PERFORMANCE.md#the-plan). In short:
 | 1. Lean what we have, and catch up with Elliott | 0.7.0 and the next two weeks | Lean block copies (default since today), draw fusion, his faster loads and natives rounds 4, 5 and 7, his upload changes, hidden symbols, Smooth Motion pacing | Faster on the benchmark, and the game plays the same |
 | 2. Behavior, not cycles | 0.8 (weeks) | Lighter timing, natives that remove round trips, cached display lists | The benchmark, and plays the same |
 | 3. Follow the decompilation | Months | Natives compiled from its source, drawing at the GX/J3D API level, matched scenes ported | Each piece checked against the recompilation |
+
+## Where things stand on October 15
+
+- **Behaviour timing is the Windows and Linux default** ([#335](https://github.com/chrissotraidis/bluewake/pull/335),
+  merged with Chris's explicit approval). `--no-behaviour-timing` turns it off; `--conservative` keeps the plain
+  translation. Mac/iOS remain opt-in. Deck and Windows play checks are recorded in [PERFORMANCE.md](PERFORMANCE.md).
+  Existing downloads have not changed; 0.8.0 is still held for the HD work and release checks.
+- **Picto recognition is fixed in `main`** ([#341](https://github.com/chrissotraidis/bluewake/pull/341),
+  `6c0ee74`), including jslay88's #334 and the RecompCore#36 pin (`57123c6`). Windows and Linux CI passed.
+  jslay88 confirmed Lenzo accepting the letter on Linux and checked an M4 Pro; pdale-boop completed all three
+  Lenzo photos on Windows with bad photos rejected. Our M3 Max/Metal check recognizes Lenzo and rejects an
+  empty wall. #333 is closed after its reporter's confirmation; #267 stays open for its original reporter.
+  A separate first-photo shader-compilation problem is covered by draft [#342](https://github.com/chrissotraidis/bluewake/pull/342)
+  and [RecompCore#39](https://github.com/chrissotraidis/RecompCore/pull/39): a generated GPU test fails on the old
+  code and passes on Metal with the follow-up. That runtime change is not pinned in `main`; Windows/Linux
+  gameplay checks and approval remain. Widescreen photo shape is separate (#338 / RecompCore#37).
+- **The native HD importer uses 46% less memory** ([#315](https://github.com/chrissotraidis/bluewake/pull/315), draft,
+  `a640108`): 1,041,235,968 → 563,806,208 bytes peak RSS on the M3 Max, standalone with four PNG workers.
+  All 3,546 texture keys still match; all 33,859 PNGs are byte-identical before/after and match the Python import's
+  decoded pixels. A fresh Mac menu import completed while gameplay continued; the pack loaded on restart,
+  the HD HUD was visible and movement worked. Full-app peak RSS was 1,400,389,632 bytes (about 1.30 GiB),
+  sampled every 250 ms. The copied card was unchanged. Output now follows the app data folder, including Linux
+  portable mode. Shutdown cancels and joins the import worker; the generated lifetime regression fails on the
+  earlier detached worker and passes under sanitizers and Mac CTest. Native WUD/WUX partition/decryption
+  and image-to-pack conversion are now implemented (`46846e2`): generated encrypted discs match the folder
+  pack in nine imports, with twelve failure/preservation checks. A fresh full folder import preserves all
+  33,859 PNG bytes. Desktop/iOS image and key pickers are implemented in the draft. A Mac menu import
+  from generated WUX metadata produced nine PNGs matching the CLI, resumed gameplay and preserved the copied
+  card. This is not an authentic full-disc check. Remaining: authentic-disc comparison,
+  Android integration, Windows/Linux interactive import, iPhone/iPad import/memory and optional fallback packs.
+  Windows/Linux CI passed at `ea31b24`. The next cancellation update reaches scans, disc/archive/PNG work and
+  publication; generated cancellation and buffered-close failures preserve existing packs. The iOS operation
+  has Cancel and bounded background cleanup, with six Foundation lifetime cases passing. Mac tests and the full
+  pack comparison pass; UIKit/Files interaction remains unverified. Forced-process staging recovery is still
+  open. This is not mobile acceptance.
+- **Contributor work:** [#319](https://github.com/chrissotraidis/bluewake/pull/319) (build documentation) is merged.
+  [#339](https://github.com/chrissotraidis/bluewake/pull/339) is also merged: Mac Alt+Enter/fullscreen and normal
+  Return behaviour passed; the no-settings-file safe-mode fallback worked, with the copied card unchanged.
+  [#337](https://github.com/chrissotraidis/bluewake/pull/337) stays draft: feedback asks for the correct Mac/mobile
+  entry paths and less duplication.
+  [#346](https://github.com/chrissotraidis/bluewake/pull/346) now isolates gallery alignment with no runtime dependency;
+  Windows/Linux gameplay checks and both CI builds pass; the fresh Mac module is compiling for its visual check.
+  [#338](https://github.com/chrissotraidis/bluewake/pull/338) retains the opt-in crop and its RecompCore#37 dependency;
+  it still needs Mac validation and a separate runtime decision.
+- **Safe startup disables HD effects** in merged [#343](https://github.com/chrissotraidis/bluewake/pull/343), after green Windows/Linux CI.
+  The earlier reset omitted the HD master/overrides. Generated fixtures and a fresh Mac/Metal gameplay run
+  pass: effects start off, then F2 turns them on and off. The backup and copied card remain unchanged; native
+  Windows/Linux checks remain in the hardware checklist.
+- **Linux resize (#325):** RecompCore#38 is open with the author's X11/NVIDIA checks. Review found a possible stale
+  cached size while F1 holds the guest. Cache synchronization and an F1-open resize/fullscreen check were requested;
+  this is a source concern, not a locally reproduced crash. No runtime integration yet.
+- **Android (#93):** the latest cool-start baseline is 90.4% at Outset's pier. The alternating cool-start baseline /
+  behaviour-timing runs remain unfinished; the warm timing run is not proof of full speed. The direct-call globals
+  experiment gave no gain. HD look and D-pad sources are included; the reordered Mods menu builds but still needs a
+  phone check. The native importer core at `ea31b24` now builds with NDK r29 and runs on an API 36 ARM64
+  emulator: five generated imports, thirty PNG checks, three reader tests and wrong-key rejection pass.
+  Draft [#347](https://github.com/chrissotraidis/bluewake/pull/347) now connects the menu, scoped document access and JNI importer,
+  with completed-pack selection and cancellation. Its full native app links with the approved runtime pin,
+  the Java shell compiles, and 33 generated provider cases pass on an API 36 emulator. The JNI bridge also
+  passes 428 assertions and 16 imports / 96 PNG checks on both the Mac JVM and Android ART.
+  The production packaging method also passes a source-only APK check on the Mac: Java classes, native exports,
+  licenses, synthetic signing and 16 KiB ZIP/ELF alignment. API 36 startup reaches the expected missing-game-data
+  diagnostic. That blocks menu use; execution used 4 KiB pages and is not a gameplay or 16 KiB-kernel check.
+  Files/menu/lifecycle and phone memory checks remain.
+  This candidate is not part of #93 or `main`; these importer results say nothing about gameplay speed.
+- **Texture status (#336):** the renderer's registered count and a separate next-launch notice are the agreed
+  direction. #345's clearer folder status and #344's Linux portal build dependency are merged after green CI.
+  The Mac status checks pass; the Linux picker needs a real desktop check. The registered-count API is not
+  started; #315 comes first, and pdale-boop can continue other menu work. HD shading
+  acceptance (#321) and the physical iPad menu-switch check (#316) also remain open.
+
+## Where things stand on October 14
+
+- **Menus and hotkeys are the same on every desktop build** (#320, pdale-boop; merged #324, #326 to #330, #332): F1
+  settings, F2 HD look, F5 save state, F7 stage select, F8 load state, F9 frame rate, F10 Smooth Motion, F11 / Alt+Enter
+  fullscreen, with a status line for each. Windows keeps F6 as a second save key. The Mac and Linux menu works with a
+  controller and has Windows' Display and Sound and files settings. Linux has Restart now and safe mode. The Windows
+  menu has the Mac and Linux layout. Checked on Linux and Windows by pdale-boop. On the Mac (M3 Max) I checked the
+  keyboard: F1, F8, F9, F10, F11, Esc and `settings.ini`. No controller or mouse check on the Mac yet.
+- **The Wind Temple's R04 and R08** (#318): pdale-boop matched the stage load against Dolphin. `d_a_shutter2.rel` is a
+  loose file on the disc, so on the console it arrives after Link is built. #331 gives loose RELs a load time back
+  (`BLUEWAKE_LOOSE_REL_RETRACES=1`, off by default). Two full sweeps: only R04 and R08 change. Next: the Mac, then on
+  by default.
+- **Behaviour timing as the default** (#215, #335): the Steam Deck is 9% faster (jkoehler11), and it played without
+  differences there and on Linux. #335 turns it on in the Windows and Linux builders: a draft for Chris.
+- **The Picto Box** (#267, #333): jslay88 found why Lenzo refuses correct photos: `GXPeekARGB` was never answered. The
+  fix is RecompCore#36 plus #334. `bluewake-next` is level with BlueWake's pin, so moving the pin brings only this
+  fix. Waiting on a photo on the Mac and Chris's OK for the pin.
+- **Greatfish merchant** (#313): fixed in `main` (#323, jslay88), confirmed by the reporter.
+- **Flicker** (#136): draw fusion ruled out. The fix is in how Smooth Motion places the sky between frames.
+- **Linux window resize crash** (#325): pdale-boop will send an Aurora fix to RecompCore (reconfigure the surface on
+  `Lost`, as for `Outdated`).
+- **Closed:** #308 (no hang on `main`), #313. #322 (German) is counted in #60.
+- **My open drafts, brought up to date with `main`:** #321 (softer HD look, waiting on Chris), #316 (iOS menu
+  switches, waiting on a tap on the iPad), #315 (the HD importer in the app).
+
+## Where things stand on October 13
+
+- **HD textures in the app, the same place on every build** (#314): **Mods › Wind Waker HD textures**, first in the
+  Mods tab on the Mac, Linux and Windows and in the ⋯ Mods menu on iPhone and iPad: the switch, the texture count and
+  adding a pack (the desktop folder picker, Install Texture Pack on iOS). The Mac and Linux menu gained a Mods tab and
+  no longer forgets next-launch choices when it is opened again.
+- **The importer is built into the app** (#315, draft): a C++ port of `scripts/wwhd` that makes the script's pack
+  exactly: from the same discs, the same 3,546 textures with identical pixels (every image's SHA-256), the same
+  33,861 files, 124 conflicts and 17 unsupported entries. **Mods › Import from Wind Waker HD…** runs it on the Mac,
+  Linux and Windows with progress; on the Mac it made the pack from the menu in about 25 seconds and the next launch
+  loaded all 3,546. On iPhone and iPad the same entry is built and installed on Chris's iPad, not yet tried there.
+  Still to do: WUX/WUD images, a leaner run for phones (1.07 GB peak on the Mac), Android.
+- **iOS menu switches keep the menu open** (#316, #104). Chris's tap test on the iPad, recorded over QuickTime, showed
+  the first version sending the menu back to the top level after every tap. It's fixed: the open submenu keeps its
+  identity and only its items change. A test app driven by a UI test on the iPad simulator confirms it. The fix is
+  installed on the iPad and still needs a tap there. An automated tap test on the iPad itself needs UI Automation
+  turned on once, with the passcode, on the iPad.
+- **The HD look looked darker than the GameCube's** (Chris, on the iPad): long dark streaks across Outset's grass
+  from the screen-space sun shadows, a dark smudge under Link and a green tint. #321 (draft, needs Chris's OK)
+  leaves sun shadows out of the HD look switch and starts ambient occlusion, cloud shadows, bloom and the far blur
+  softer. Compared on the Mac (Outset pier, cavern) and installed on the iPad.
+- **#314 is merged.** pdale-boop asked in #320 for the same hotkeys and settings on every build. The answer: their
+  hotkey table everywhere, with Windows' F6 kept as a second save key, the Windows-only settings brought to Linux and
+  the Mac, and controller navigation for the Linux/Mac menu. #318 (Wind Temple R04/R08 crash at a stage load) got the
+  list of host timing switches to rule out.
+- **#313** (Greatfish merchant under his raft): the merchant and his raft load separate archives, and when the
+  merchant's finishes first his one ground check misses the raft. Waiting for the reporter's details before a fix.
+- **#313** (Greatfish merchant): jslay88's fix, tested on their Linux build, is #323 with them as co-author; to merge once
+  they confirm a build from the branch.
+- **#318** (Wind Temple R04/R08): pdale-boop found the cause. `d_a_shutter2.rel` is a loose file on the disc, so on the
+  console the shutter is created about 12 retraces after Link is built; BlueWake has every module in memory, so it's
+  created inside Link's two-frame gap. Agreed approach: give loose RELs a load time back, behind a switch that's off
+  by default, then the stage select sweep with and without it.
+- **Android (#93):** behaviour timing on the Fold 7 gives about 4% fewer instructions and 10% fewer cycles a retrace and a
+  10% smaller module. The run that decides the merge: Outset's pier from a cool start, `main` and behaviour timing
+  alternated. CI for #93 was waiting for a maintainer's approval; approved October 13.
+- **Behaviour timing as the default** (#215): plays fine on pdale-boop's rig (21:9, 60 FPS); waiting for jkoehler11 on
+  the Steam Deck.
+- **#322:** a request for the PAL version. Not planned for now: the translation and every host address are for GZLE01.
+- Merged: #312 (the release draft), #300 (cforain's build-process docs), #314. Waiting on Chris as on October 12, and on #321.
+
+## Where things stand on October 12
+
+- **The Wind Waker HD look is in `main`** (#284, #287; RecompCore ee99bbc): distant islands, ambient occlusion, sun and
+  cloud shadows, edge light, torch light, HD's far-distance blur and bloom, one switch, off by default, on Mac, Linux,
+  Windows and iOS; **F2** switches it in the game on the desktop (#306). HD textures from a real Wii U dump (3,546) load
+  with it; the importer installs into the Mac and Linux apps' own folders (#295). Not yet played on Windows, Linux or a
+  phone.
+- **Fixed in `main`:** the sea chart and the Pictobox (#283: the cache-flush fallback on by default, and a flush keeps
+  the GPU's EFB copies, the reporter's red plane). The reporter confirms on the next Windows build.
+- **Controls:** the D-pad in Items and Quest Status (#298, #301) and gyro aiming (#302, #304), off by default, on every
+  platform but Android; Linux portable mode (pdale-boop, #303); cforain's architecture docs (#282).
+- **Speed, measured:** on Chris's iPad Pro the prepared iOS build (combined, lean blocks, memory and deadlines) takes the
+  game thread from 81% to 54% at Outset's sea and 53% to 43% in Dragon Roost Cavern, `--behaviour-timing` another 2
+  points; on x86 `--behaviour-timing` is 7 to 11% faster (pdale-boop, 27 of 27 pairs); training with the lazy watch on
+  (#297) is 4.4 to 5.2% faster on the Mac. The alias resolver's last hit (RecompCore #34) gained nothing and is closed.
+- **Flicker (#136):** ComradeClaritux's 120 FPS recording shows Smooth Motion's in-between frames drawing the clouds in the
+  wrong place during a fast turn (frames in order). Not reproduced on the Mac; the next step needs a machine that shows it.
+- **Waiting on contributors:** #297 to be brought up to date with `main` (pdale-boop); behaviour timing played by a few
+  people and on the Deck; the Android port (#93, LiquidAzir) needs `dpad_menus.c` and `hd_look.c` in its build; reporters
+  of #263, #245, #188, #108 and #104 to try the next build.
+- **Waiting on Chris:** whether the prepared iOS build becomes the iPhone and iPad default (installed on his iPad to
+  play); `--behaviour-timing` as a default once people have played it; whether the apps offer HD texture import from a
+  menu; when to freeze 0.8.0.
 
 ## Where things stand on October 11
 
@@ -73,14 +234,14 @@ iPad alike. Chris decided:
 
 | # | Step | Notes |
 | --- | --- | --- |
-| H1 | HD textures and HUD from your own Wii U dump, chosen in the app's setup, not only by `scripts/import_wwhd_textures.py`; what breaks with a pack fixed (the sea chart, #263: the cache-flush fallback on by default is Chris's call) | #57 asks for the HD UI |
+| H1 | HD textures and HUD from your own Wii U dump, made in the app on every build | **October 15:** #315 remains draft, with exact 3,546-texture parity and lower standalone Mac memory use (above). **Mods › Wind Waker HD textures › Import from Wind Waker HD…** is wired on desktop and iOS; the fresh Mac menu import and restart loaded the pack, with full-app peak memory recorded above. Finish WUX/WUD/key-file input and Android, then interactive imports and memory checks on each platform. Renderer load status is #336; redesigned HD menus (#57) remain separate from replacing HUD textures. |
 | H2 | **Distant islands.** The island LOD actor (`d_a_lod_bg.cpp`) shows an island's far model within `scale.x` (its placed scale times 20,000 units), sinks it below the sea past 150,000 and draws with the far plane at 500,000. **In `main` (October 12), off by default:** the host adds 100,000 units to both distances on each island model; [WWHD_LOOK.md](WWHD_LOOK.md) | Game-side, no renderer change; the cheapest |
-| H3 | Bloom and the far-distance blur, as passes after the frame in Aurora | **Built** (RecompCore #26, #27), off by default, on the switch in BlueWake #287, a draft that waits for Chris to approve the pin |
-| H4 | Ambient occlusion from the depth buffer | **Built** (RecompCore #28), on the switch in #287 with H3 |
-| H5 | Cloud shadows on the sea | RecompCore |
-| H6 | Sun shadows over the whole scene, edge light on characters, light from torches and fires | The hardest: needs the scene drawn from the sun |
+| H3 | Bloom and the far-distance blur, as passes after the frame in Aurora | **In `main`** (#287, October 12; RecompCore ee99bbc) (RecompCore #26, #27), off by default, on the switch from BlueWake #287 (RecompCore a10b7e4) |
+| H4 | Ambient occlusion from the depth buffer | **In `main`** (#287, October 12; RecompCore ee99bbc) (RecompCore #28), on the switch in #287 with H3 |
+| H5 | Cloud shadows on the sea | **In `main`** (#287, October 12; RecompCore ee99bbc) (RecompCore #29): the game's camera passed to Aurora, the world rebuilt from depth or the sea plane; on the switch in #287 |
+| H6 | Sun shadows over the whole scene, edge light on characters, light from torches and fires | **In `main`** (#287, October 12; RecompCore ee99bbc) (RecompCore #30 to #32, on the switch in #287): sun shadows and edge light from the screen, torch light from the game's point lights. A full shadow map is a later step |
 | H7 | The Wind Waker HD / GameCube switch that sets them together | **In with H2:** "Wind Waker HD look" in the Mac, Linux, Windows and iOS menus (`BLUEWAKE_HD_LOOK`); Android when #93 lands |
-| T1 | The game-behaviour timing prototype | A switch, measured like every other step. Steps 1 and 2 built October 12, opt-in (`--behaviour-timing`: every block prepaid, the budget checked at loops): 7.0% / 9.1% faster on the Mac, module 8.5% smaller, the same sweep and the same sound ([note](status/BEHAVIOUR_TIMING_2026-10-12.md)). A PC, the Deck and a phone next; Chris decides any default |
+| T1 | The game-behaviour timing prototype | **Windows/Linux default merged in #335, with Chris's approval.** Mac/iOS remain opt-in. Mac: 7.0% / 9.1% faster, module 8.5% smaller, the same sweep and sound ([note](status/BEHAVIOUR_TIMING_2026-10-12.md)); iPad Pro: Outset's sea 54% to 52% game-thread busy, cavern 43% to 41%. Intel desktops: 7 to 11%; Deck: 9%, with cutscene/music and sailing checked. Android's deciding cool-start comparison remains pending. |
 
 ## Now: the speed sprint (from October 11)
 
@@ -99,7 +260,7 @@ Chris decides every default change, any merge that changes how the game runs, th
 | --- | --- | --- | --- |
 | S1 | **Done October 11 ([record](status/SPEED_PROFILE_2026-10-11.md)): about a quarter of the CPU time is the game's own work; the rest is the program counter and cycle observation around memory instructions, the dispatcher, exact floating point and the host's per-call checks.** Measure where the game thread's time goes, on this Mac's ARM build with the PC builds' preparations and lean blocks (`--combined-optimizations --lean-blocks`, #257): headless, unpaced, from save states at Outset, the bird scene and Dragon Roost Cavern; a CPU profile split into game work, per-instruction bookkeeping, memory access, the host's per-call checks and the renderer's writes. | Codex | A table in [PERFORMANCE.md](PERFORMANCE.md#results) that ranks the shares |
 | S2 | **Fix 1 measured October 12: `--lean-memory` (already in the Windows and Linux builders) is about 5.5 to 6% faster on this Mac and plays the same; contributors asked for x86, Deck and phone numbers; turning it on by default is Chris's decision. On Apple it needs the training link fixed first. Fix 2, October 12: `--lean-deadlines` (new, opt-in in all three builders) is 3.7 to 4.9% faster again, with the same game state; the module is 8.5% larger. The host's per-call checks answered inline in the module: no gain alone. Fix 3: `BLUEWAKE_LAZY_OVERLAP=1` takes the scene overlap watch, which only diagnostics read, out of those checks, and then the inline answer pays: 3.9 to 4.7% faster, same game state ([record](status/SPEED_PROFILE_2026-10-11.md)). All of them together (with the alias resolver's last hit, waiting on Chris) against lean blocks: 13.2% less game-thread time at Outset and 16.5% in Dragon Roost Cavern, untrained, same game state.** Remove the biggest share first, from S1's ranking: (1) the program counter, the cycle observation and the deadline check only on the path that leaves RAM; (2) the host's per-call checks as one inline flag; (3) MSR[FP] checked once per block; (4) fewer dispatches; (5) a last-hit cache for alias lookups. Earlier list: the host's per-call checks become one flag the module reads inline (row 0 below); the memory fast path checks one "slow memory" flag instead of aliases, reservation and write journal separately (RecompCore `cpu.h`); the lean copies write the program counter and the observation value only where an instruction can observe them; the game's registers stay in locals inside a block. | Codex | Each: a switch, matching checkpoints at three states, a "Results" row on the Mac and one from a contributor's PC or phone |
-| S3 | **Apple builds with the PC preparations** (PRIORITIES row 6): the same states on a plain Mac build and a prepared one. **October 12: the trained Mac build with lean memory and lean deadlines links now (training at `-O1`) and is 6.3 to 7.4% faster than the trained lean build** ([record](status/SPEED_PROFILE_2026-10-11.md)). Still to do: the plain Mac build in the same table, and an iPad. | Codex | Numbers recorded; Chris decides the default |
+| S3 | **Apple builds with the PC preparations** (PRIORITIES row 6): the same states on a plain Mac build and a prepared one. **October 12: the trained Mac build with lean memory and lean deadlines links now (training at `-O1`) and is 6.3 to 7.4% faster than the trained lean build** ([record](status/SPEED_PROFILE_2026-10-11.md)). Still to do: the plain Mac build in the same table, and an iPad. **October 12, the iPad Pro (M2) baseline** on the installed 0.7.0 tiered build, copied cards, 7,200 retraces: Outset's sea 81% game-thread busy, Dragon Roost Cavern 53%, both at 59.9, matching October 11; the prepared build (combined, lean blocks, memory and deadlines, trained, from `main`'s code): Outset's sea 54% busy and the cavern 43%, both at 59.9, no crash, Chris's save unchanged. A third less game-thread time at Outset; played by hand next. | Codex | Numbers recorded; Chris decides the default |
 | S4 | **Prepare the next release in parallel,** without deciding it: what is in `main` since 0.7.0, its checks, and the Linux AppImage as the headline. **Draft: [RELEASE_NEXT_DRAFT_2026-10-11.md](status/RELEASE_NEXT_DRAFT_2026-10-11.md).** | Codex prepares; Chris decides | A release record ready for Chris |
 
 Waiting on Chris: whether Android (#93) merges as experimental below full speed, and when to freeze the release.

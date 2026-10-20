@@ -141,15 +141,15 @@ time you visit an untested area, and busy scenes on iPhone drop below 30 FPS.
 
 ## Mods
 
-Open **⋯ › Mods** on iPhone and iPad, or press **F1 › Mods** on Windows and Linux. Mods apply the next
+Open **⋯ › Mods** on iPhone and iPad, or press **F1 › Mods** on Mac, Windows and Linux. Mods apply the next
 time BlueWake starts and never change your saves.
 
 | Mod | What it does |
 | --- | --- |
-| **Widescreen 16:9 / 16:10 / 21:9** | A wider view with the HUD placed to fit. Built in |
-| **HD Texture Pack** | Replaces the game's textures, for example with Hypatia's HD pack (see the FAQ) |
+| **Widescreen 16:9 / 16:10 / 21:9** | A wider view with the HUD placed to fit. Built in; on Mac, Windows and Linux it's **F1 › Mods › Widescreen** |
+| **Wind Waker HD textures** | First in Mods on every build: turn **HD textures** on, see how many textures it found, and choose or install a pack, such as Hypatia's HD pack (see the FAQ) or [the textures from your own Wind Waker HD disc](docs/WWHD_TEXTURES.md) |
 | **Better Wind Waker** | Swift Sail, instant text, faster animations and more, each set separately |
-| **Gameplay extras** | Jump & Sprint, Fast Transitions and Quick Doors, under **⋯ › Gameplay** |
+| **Gameplay extras** | Jump & Sprint, Fast Transitions and Quick Doors, under **⋯ › Gameplay** (iPhone and iPad) or **F1 › Gameplay** (Mac, Windows and Linux) |
 
 Code mods are built into your app, so a module built before an update does not gain newer Better Wind
 Waker settings or 16:10 until you rebuild it. More in [docs/MODS.md](docs/MODS.md).
@@ -157,8 +157,8 @@ Waker settings or 16:10 until you rebuild it. More in [docs/MODS.md](docs/MODS.m
 ## Your saves
 
 - Saves are in **GZLE01.card**: in Files under **On My iPhone/iPad › BlueWake › BlueWake**,
-  **`%APPDATA%\BlueWake`** on Windows, or **`~/.local/share/BlueWake`** on Linux. Windows also has a
-  [portable mode](docs/WINDOWS.md#your-saves-and-logs).
+  **`%APPDATA%\BlueWake`** on Windows, or **`~/.local/share/BlueWake`** on Linux. Windows and Linux also have
+  a portable mode ([Windows](docs/WINDOWS.md#your-saves-and-logs), [Linux](docs/LINUX.md)).
 - On iPhone and iPad, **⋯ › Game Data & Saves › Back Up Saves…** exports a copy, and
   **Restore Saves…** brings one back.
 - Install updates over the existing app. **Deleting BlueWake deletes its saves**, so back them up first.
@@ -267,10 +267,12 @@ following [the Linux guide](docs/LINUX.md). A ready-made Linux download has not 
 <details>
 <summary><strong>Is there an Android version?</strong></summary>
 
-Not yet. LiquidAzir's Android port ([#93](https://github.com/chrissotraidis/bluewake/pull/93)) builds the game
-from your own disc and plays, with the iPhone app's menu, touch controls, controllers and saves. It will be
-merged as an experimental build-it-yourself option once it holds full speed on a phone; on a Galaxy Z Fold 7 it
-runs Outset at about 70 to 80% today. Follow [#75](https://github.com/chrissotraidis/bluewake/issues/75) for news.
+The Android port is still in review ([#93](https://github.com/chrissotraidis/bluewake/pull/93)). It builds
+from your own disc and plays on a Galaxy Z Fold 7. The latest cool-start check at Outset's pier reached
+90.4% of full speed (October 13). Saving/loading and controller handoff have been checked there;
+the next timing comparison, reordered Mods menu and controller D-pad checks remain open.
+Native HD texture import is being added in [draft #347](https://github.com/chrissotraidis/bluewake/pull/347).
+There is no supported Android release yet. Follow [#75](https://github.com/chrissotraidis/bluewake/issues/75) for news.
 
 </details>
 
@@ -278,14 +280,16 @@ runs Outset at about 70 to 80% today. Follow [#75](https://github.com/chrissotra
 <summary><strong>Do controllers work?</strong></summary>
 
 Yes. On iPhone and iPad, any controller iOS supports works, with rumble, camera inversion and button
-remapping under **⋯ › Controller**. On Mac, Windows and Linux, Xbox, PlayStation, Switch Pro and other
-SDL controllers work; remap buttons under **Settings › Controls › Controller buttons** (F1 or Esc
+remapping under **⋯ › Controller**. Mac, Windows and Linux work with Xbox, PlayStation, Switch Pro and
+other SDL controllers; remap buttons under **Settings › Controls › Controller buttons** (F1 or Esc
 opens settings). The same tab changes what the mouse buttons and keyboard keys press.
+The settings menu works with a controller too: the D-pad or left stick moves, the game's A chooses, its B
+closes, LB and RB change tabs and the right stick scrolls.
 
 If BlueWake doesn't see your controller at all (a generic Bluetooth pad, for example), download
 `gamecontrollerdb.txt` from [SDL_GameControllerDB](https://github.com/mdqinc/SDL_GameControllerDB), put it
-in the folder with your saves (`%APPDATA%\BlueWake` on Windows, or the `user` folder in portable mode;
-`~/Library/Application Support/BlueWake` on a Mac; `~/.local/share/BlueWake` on Linux) and start
+in the folder with your saves (`%APPDATA%\BlueWake` on Windows; `~/Library/Application Support/BlueWake` on a
+Mac; `~/.local/share/BlueWake` on Linux; or the `user` folder in portable mode on Windows and Linux) and start
 BlueWake again.
 
 </details>
@@ -328,11 +332,14 @@ Dolphin's **Tools › Memory Card Manager**.
 
 Extract the pack. Its **`GZL` folder holds the textures**; keep its subfolders and filenames as they are.
 
-- **Windows:** press **F1 › Mods › Open the texture folder** (or open
-  `%APPDATA%\BlueWake\Load\Textures\GZLE01`) and copy `GZL` into it.
+Every build has the same section, **Mods › Wind Waker HD textures**, first in the Mods tab or menu:
+
+- **Mac, Windows and Linux:** press **F1 › Mods › Choose texture pack folder…** and select `GZL`. On
+  Windows you can also use **Open the texture folder** (`%APPDATA%\BlueWake\Load\Textures\GZLE01`)
+  and copy `GZL` into it.
 - **iPhone and iPad:** use **⋯ › Mods › Install Texture Pack…** and select `GZL` in Files.
 
-Then enable **HD Texture Pack** and restart BlueWake. Leave the pack's **Optional Textures** out
+Then turn on **HD textures** and restart BlueWake; the section shows how many textures it found. Leave the pack's **Optional Textures** out
 unless you pick specific ones, since they compete with the main textures. You don't need its
 **WideScreen Patch**; use BlueWake's built-in widescreen. For a smaller pack on iPhone and iPad, see
 [Mods](docs/MODS.md#installing).

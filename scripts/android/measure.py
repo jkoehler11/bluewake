@@ -58,6 +58,10 @@ def main():
     parser.add_argument("--seconds", type=int, default=60, help="how long to count")
     parser.add_argument("--cool", action="store_true", help="wait for a cool phone at full clocks first")
     parser.add_argument("--headless", action="store_true", help="no drawing and no pacing")
+    parser.add_argument("--probe", action="store_true",
+                        help="log the player's position (BLUEWAKE_PLAYER_PROBE) to check the spot. Since #297 the "
+                             "probe also keeps the full overlap watch until the opening's player control, which a "
+                             "save from the card never reaches, so the speed it measures is not the player's")
     parser.add_argument("--pad-script", default=PAD_SCRIPT, help="BLUEWAKE_PAD_SCRIPT that loads the save")
     parser.add_argument("--env", action="append", default=[], metavar="NAME=VALUE",
                         help="more launch settings for the run, such as DOL_AURORA_RENDER_SCALE=3 (repeat)")
@@ -134,12 +138,14 @@ def main():
     elif sram:
         shell(f"cat '{sram}' > {files}/measure-sram.bin")
 
-    env = [f"BLUEWAKE_CARD_PATH={files}/measure.card", "BLUEWAKE_PERF_LOG=1", "BLUEWAKE_PLAYER_PROBE=1",
+    env = [f"BLUEWAKE_CARD_PATH={files}/measure.card", "BLUEWAKE_PERF_LOG=1",
            "BLUEWAKE_PAD_BUTTONS=0x0100", "BLUEWAKE_PAD_PULSE_ON_TITLE_READY=1", "BLUEWAKE_PAD_PULSE_LENGTH=2",
            "BLUEWAKE_PAD_CONFIRM_EVENT=any", f"BLUEWAKE_PAD_SCRIPT={args.pad_script}",
            "BLUEWAKE_MAX_RETRACES=200000"]
     if sram:
         env.append(f"BLUEWAKE_SRAM={files}/measure-sram.bin")
+    if args.probe:
+        env.append("BLUEWAKE_PLAYER_PROBE=1")
     if args.headless:
         env += ["BLUEWAKE_RENDERER=headless", "BLUEWAKE_WALL_PACE=0"]
     env += args.env
@@ -181,6 +187,11 @@ def main():
         stat = shell(f"simpleperf stat --app {args.package} --per-thread -e cpu-cycles,instructions "
                      f"--duration {args.seconds} 2>/dev/null", False)
         r1, t1 = retrace(), time.time()
+        # Something else stopping the app (another measurement, a reinstall) ends the count early: the
+        # instructions and retraces then cover only the time it ran, and the speed a shorter window.
+        ran_through = bool(shell(f"pidof {args.package}", False).strip())
+        if not ran_through:
+            print("  the game stopped during the count: the result covers only the time it ran", flush=True)
         end_skin, end_caps = skin_temperature(), caps()
     finally:
         shell(f"am force-stop {args.package}", False)
@@ -214,7 +225,7 @@ def main():
     stage = re.findall(r"stage=(\S+) room=(\d+)", text)
 
     result = {
-        "label": args.label, "mode": mode, "log": log,
+        "label": args.label, "mode": mode, "log": log, "game_ran_whole_count": ran_through,
         "retraces": retraces, "seconds": round(t1 - t0, 1),
         "speed_percent": round(rate / RETRACE_HZ * 100, 1),
         "game_thread_busy_percent": round(busy, 1) if busy is not None else None,
