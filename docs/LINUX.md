@@ -55,6 +55,17 @@ mounts the disc read-only and writes normal outputs to `build/linux`; the disc
 never enters the image or CI. The result is always an x86-64 Linux build. Arm
 hosts use Docker's `linux/amd64` emulation, which is substantially slower.
 
+### If the container build fails
+
+- **Don't run it with `sudo`.** Files a root run creates make Git refuse the checkout ("dubious ownership") and
+  block later runs. Give them back with `sudo chown -R "$USER": path/to/bluewake`, add yourself to the
+  `docker` group (`sudo usermod -aG docker "$USER"`, then log out and back in), and check that `docker info`
+  works without `sudo`.
+- **"failed to extract layer", "content digest ... not found" or another image error:** Docker's build cache is
+  damaged, often after a run with `sudo`. Your disc image is fine. Run `docker builder prune -af` and build again.
+- **Bazzite, Fedora Atomic and other read-only systems:** build inside a Distrobox (for example Ubuntu 24.04) with the
+  native steps below, or use the ready-made AppImage once it is published.
+
 ## Native build
 
 Install CMake 3.25+, Ninja, Git, `pkg-config`, Clang/Clang++ 17 or newer, LLD,
@@ -65,7 +76,7 @@ Install CMake 3.25+, Ninja, Git, `pkg-config`, Clang/Clang++ 17 or newer, LLD,
       git build-essential pkg-config libwayland-dev libxkbcommon-dev \
       libx11-xcb-dev libx11-dev libxrandr-dev libxext-dev libxi-dev \
       libxcursor-dev libgl1-mesa-dev libvulkan-dev libasound2-dev libpulse-dev \
-      libxss-dev libxtst-dev zlib1g-dev libpng-dev libfreetype6-dev \
+      libxss-dev libxtst-dev libdbus-1-dev zlib1g-dev libpng-dev libfreetype6-dev \
       libsqlite3-dev libzstd-dev libfmt-dev libbz2-dev libbrotli-dev libicu-dev
 
 Use your distribution's equivalent packages, then run:
@@ -111,6 +122,9 @@ Useful options:
     --source-only  stop after translating: checks tools, disc and translation
                    in minutes, before the long compile
     --no-mods      skip the widescreen and Better Wind Waker variants
+    --no-behaviour-timing
+                   check the turn's budget after every block, as before behaviour
+                   timing (on by default since October 14); about 9% slower
     --opt-level 1  faster to compile, a little slower in game
     --jobs N       parallel compile jobs (default: all cores, limited by memory)
     --host-only    after pulling a change to the app's own code (runtime/host/src,
@@ -173,17 +187,24 @@ that are new on Linux are off until you turn them on. The widescreen choice is u
 textures. Under **Gameplay**, Jump & Sprint (with a **Sprint speed**) and Fast transitions are one
 switch each, as on the iPad.
 
-**Sound and files** is the last tab, as on Windows: the sound (**Fast**, Dolphin's high-level Zelda sound,
-the default, or **Exact**, the sound chip's own program, slower; next launch), and where your saves and
-session logs are, with buttons that open the folder and the logs. The menu's buttons are the same on every
+**Config** is the last tab: **Exact sound** (off: Dolphin's high-level Zelda sound, the default and faster;
+on: the sound chip's own program, slower; next launch), the menu's own settings (**Pause the game while the
+menu is open**, **Menu text size** and **Menu contrast**), and where your saves and session logs are, with
+buttons that open
+the folder and the logs. The menu opens at the size and place you left it. The menu's buttons are the same on every
 desktop build: Resume, Save state (F5), Load latest state (F8) and Quit the game.
 
 A setting that applies at the next launch shows **Restart now** beside its note: BlueWake saves your
 settings, closes and starts again by itself.
 
+**Wayland:** when `WAYLAND_DISPLAY` is set, BlueWake presents with mailbox instead of FIFO (#370, jslay88). FIFO
+waits for the compositor on the game thread, and on KWin 6.8 that wait held the game at about 70% speed.
+Mailbox doesn't tear. `BLUEWAKE_VSYNC=1` brings back FIFO. Checked on KWin 6.8; GNOME and the Steam Deck's
+gamescope haven't been checked yet.
+
 **Safe mode:** if the last launch never reached a clean exit (it crashed or was killed), the next one starts
 in safe mode, as on Windows: Fast sound, 4:3, in a window, with the mods, Better Wind Waker's settings, the
-texture pack, the gameplay extras and the stage select off. Your earlier `settings.ini` is copied beside it
+texture pack, the HD look, the gameplay extras and the stage select off. Your earlier `settings.ini` is copied beside it
 first (`settings.ini.before-safe-mode-...`), and a note says so for fifteen seconds. Turn things back
 on in the settings menu. `--safe-mode` starts in safe mode on purpose.
 
@@ -244,6 +265,11 @@ Clang 18 by default, includes optional Clang 22 tools, and retains Ubuntu's
 libc++ 18 with either compiler.
 The completed AppImage is automatically audited for prohibited private files,
 accidental libstdc++ linkage and a maximum `GLIBC_2.39` requirement.
+To pass that audit, `--appimage` builds the app with LLVM libc++, which the
+AppImage carries, and builds Dawn from source with it, as Linux CI does (the
+prebuilt Dawn package links libstdc++). It uses its own `app-appimage` build
+folder, so the first AppImage build takes longer; folder builds keep the
+prebuilt Dawn.
 
 The outputs are:
 
@@ -260,9 +286,11 @@ it under the Linux release exception, after it passes the release asset check:
 
     scripts/release/check_public_assets.sh build/linux/BlueWake-x86_64.AppImage
 
-### Run the downloaded AppImage
+### Run the AppImage
 
-1. Make the download executable (you only need to do this once):
+No ready-made Linux AppImage has been published yet; these steps work for one you built.
+
+1. Make the AppImage executable (you only need to do this once):
 
        chmod +x BlueWake-x86_64.AppImage
 
