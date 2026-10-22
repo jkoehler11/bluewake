@@ -14,7 +14,9 @@ loads. One headless setup plays that card and saves a state at retrace
 
 --setup-state FILE keeps that state: the setup pass writes it to FILE, and a
 later run that names the same FILE loads it instead of playing the card route
-again. Two runs are only comparable when they load the same guest state, and
+again. The setup pass must reach gameplay: a card whose quest log 1 has no save
+starts a new file instead, the state is saved on the name-entry screen, and the
+run measures menus, so the log's play-scene milestone is required. Two runs are only comparable when they load the same guest state, and
 the card continue is not reproducible (the same build booted twice from the
 same card differs from retrace 300), so this is what the "two runs of the same
 build: identical checkpoints" check needs. Write it outside the repository: it
@@ -92,6 +94,7 @@ CHECKPOINT = re.compile(
 )
 FAILED_CHECKPOINT = re.compile(r"\[guest-checkpoint\] failed retrace=(?P<retrace>\d+)")
 STATE_LOADED = re.compile(r"\[state\] loaded \S+ retrace=(?P<retrace>\d+)")
+PLAY_SCENE = re.compile(r"\[boot-milestone\] play-scene retrace=\d+")
 
 
 class Stop(NamedTuple):
@@ -468,6 +471,11 @@ def run_tour(card, app, *, stop_retraces: int, untrained: bool, mode: str, state
             if setup_code != 0 or not state_path.is_file():
                 print(f"setup failed ({setup_code}); log {setup_log}", file=sys.stderr)
                 return setup_code or 1
+            if not PLAY_SCENE.search(setup_log.read_text(encoding="utf-8", errors="replace")):
+                print(f"the card route never reached gameplay (no play-scene milestone); "
+                      f"the state is not a scene. A card needs a save in quest log 1. "
+                      f"log {setup_log}", file=sys.stderr)
+                return 1
             if kept_state is not None:
                 print(f"wrote the setup state {kept_state}", file=sys.stderr)
             load_state = state_path

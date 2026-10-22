@@ -212,6 +212,8 @@ if save:
     path, _, at = save.rpartition("@")
     Path(path).write_bytes(b"setup-%d" % count)
     print("[state] saved %s retrace=%s" % (path, at))
+    if not (here / "no_gameplay").exists():
+        print("[boot-milestone] play-scene retrace=609")
     sys.exit(0)
 
 state = Path(os.environ["BLUEWAKE_LOAD_STATE"]).read_bytes()
@@ -299,6 +301,18 @@ class SetupStateTests(unittest.TestCase):
         code, text = bench_tour.compare_summaries(left, right)
         self.assertNotEqual(code, 0)
         self.assertIn('checkpoints differ', text)
+
+    def test_a_setup_that_never_reached_gameplay_fails(self):
+        (self.root / 'no_gameplay').write_text('')
+        (self.root / 'run1').mkdir()
+        with working_directory(self.root / 'run1'):
+            code = bench_tour.run_tour(
+                'card', str(self.app), stop_retraces=600, untrained=False,
+                mode='headless', state=None, setup_state=str(self.state),
+            )
+        self.assertEqual(code, 1)
+        self.assertEqual(self.invocations(), 1)
+        self.assertFalse((self.root / 'run1' / 'summary.json').exists())
 
 
 if __name__ == '__main__':
