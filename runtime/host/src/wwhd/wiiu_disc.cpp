@@ -131,7 +131,13 @@ struct Content {
     DiscSha1 digest{};
 };
 
-Region cluster_region(const Partition& partition, const FileTable& table, uint16_t index) {
+// Bytes a content occupies on the disc: a hashed content stores a hash block
+// with its payload, and an encrypted one is read in whole AES blocks.
+uint64_t physical_bytes(const Content& content) {
+    return (content.type & 1) ? align16(content.size) : content.size;
+}
+
+Region cluster_region(const Partition& partition, const FileTable& table, uint16_t index, uint64_t bytes = 0) {
     if (index >= table.clusters.size())
         throw FormatError("invalid Wii U content index");
     const Cluster& cluster = table.clusters[index];
@@ -141,7 +147,13 @@ Region cluster_region(const Partition& partition, const FileTable& table, uint16
     // A zero allocation size falls back to partition bounds; game contents
     // additionally have their TMD size.
     if (cluster.sectors) {
-        const uint64_t bytes = uint64_t(cluster.sectors) * kSector;
+        // A hashed content's allocation counts payload sectors, so on a real
+        // disc it falls short of the hash blocks stored with that payload. The
+        // title metadata's own size is the authority when it asks for more.
+        const uint64_t allocated = std::max(uint64_t(cluster.sectors) * kSector, bytes);
+        range(offset, allocated, partition.data.size());
+        result.end = result.start + allocated;
+    } else if (bytes) {
         range(offset, bytes, partition.data.size());
         result.end = result.start + bytes;
     }
@@ -217,7 +229,7 @@ struct WiiUDisc::Impl {
         return out;
     }
 
-    explicit Impl(const std::string& path, const WiiUDiscKeys& keys) : image(path), disc_key(keys.disc) {
+    explicit Impl(const std::string& path, const WiiUDiscKeys& keys) : image(path) {
         const Bytes identity = image.read(0, 64);
         const auto identity_end = std::find(identity.begin(), identity.end(), 0);
         const std::string identifier(identity.begin(), identity_end);
@@ -225,10 +237,26 @@ struct WiiUDisc::Impl {
             std::any_of(identifier.begin(), identifier.end(), [](unsigned char c) { return c < 32 || c > 126; }))
             throw FormatError("expected Wind Waker HD USA disc (BCZE)");
 
-        const Bytes toc_bytes = metadata({0x18000, image.size()}, 0x8000, disc_key);
-        const Reader toc(toc_bytes);
-        if (toc.u32(0) != 0xCCA6E67B)
+        // Every key in a keys file is tried: only this disc's own decrypts its
+        // partition table, which names the partitions below.
+        const Bytes toc_raw = read_region({0x18000, image.size()}, 0, 0x8000);
+        Bytes toc_bytes;
+        for (const DiscKey& candidate : keys.disc) {
+            check_cancel();
+            Bytes plain = disc_aes_cbc_decrypt(candidate, DiscKey{}, toc_raw);
+            if (Reader(plain).u32(0) == 0xCCA6E67B) {
+                disc_key = candidate;
+                toc_bytes = std::move(plain);
+                break;
+            }
+        }
+        if (toc_bytes.empty()) {
+            if (keys.disc.size() > 1)
+                throw FormatError("none of the " + std::to_string(keys.disc.size()) +
+                                  " keys in the disc key file decrypt this disc");
             throw FormatError("incorrect WUD disc key");
+        }
+        const Reader toc(toc_bytes);
         const uint32_t count = toc.u32(28);
         if (!count || count > (toc.size() - 0x800) / 0x80)
             throw FormatError("invalid Wii U partition count");
@@ -287,10 +315,11 @@ struct WiiUDisc::Impl {
         if (tmd_bytes.empty())
             throw FormatError("Wind Waker HD title metadata not found");
 
-        if (keys.title) {
-            title_key = *keys.title;
-        } else {
-            if (!keys.common)
+        // The same for the title: each title key given, or each common key's
+        // ticket, is tried until the game file table's checksum matches.
+        std::vector<DiscKey> title_keys = keys.title;
+        if (title_keys.empty()) {
+            if (keys.common.empty())
                 throw FormatError("provide the disc title key, or a common key to decrypt its ticket");
             const std::string ticket_path = tmd_path.substr(0, tmd_path.size() - 4) + ".tik";
             const auto ticket_entry = std::find_if(system_files.entries.begin(), system_files.entries.end(),
@@ -304,8 +333,13 @@ struct WiiUDisc::Impl {
             DiscKey iv{};
             std::copy_n(ticket.take(0x1DC, 8), 8, iv.begin());
             const uint8_t* encrypted = ticket.take(0x1BF, 16);
-            const Bytes key = disc_aes_cbc_decrypt(*keys.common, iv, Bytes(encrypted, encrypted + 16));
-            std::copy_n(Reader(key).take(0, 16), 16, title_key.begin());
+            for (const DiscKey& common : keys.common) {
+                const Bytes key = disc_aes_cbc_decrypt(common, iv, Bytes(encrypted, encrypted + 16));
+                DiscKey derived{};
+                std::copy_n(Reader(key).take(0, 16), 16, derived.begin());
+                if (std::find(title_keys.begin(), title_keys.end(), derived) == title_keys.end())
+                    title_keys.push_back(derived);
+            }
         }
 
         const Reader tmd(tmd_bytes);
@@ -333,9 +367,22 @@ struct WiiUDisc::Impl {
         const Content& fst = fst_content->second;
         if (fst.size < game.fst_size)
             throw FormatError("Wii U game file table size does not match title metadata");
-        Bytes raw = metadata(game.data, fst.size, title_key);
-        if (disc_sha1(raw) != fst.digest)
+        Bytes raw;
+        for (const DiscKey& candidate : title_keys) {
+            check_cancel();
+            Bytes plain = metadata(game.data, fst.size, candidate);
+            if (disc_sha1(plain) == fst.digest) {
+                title_key = candidate;
+                raw = std::move(plain);
+                break;
+            }
+        }
+        if (raw.empty()) {
+            if (title_keys.size() > 1)
+                throw FormatError("none of the " + std::to_string(title_keys.size()) +
+                                  " keys supplied for the title key match this disc");
             throw FormatError("title key or game file table checksum is incorrect");
+        }
         raw.resize(game.fst_size);
         files = file_table(raw);
         // Validate every file against its content before exposing the table.
@@ -344,18 +391,18 @@ struct WiiUDisc::Impl {
     }
 
     const Content& checked_content(const WiiUDiscEntry& entry) const {
-        const Region region = cluster_region(game, files, entry.cluster);
         const auto found = contents.find(entry.cluster);
         if (found == contents.end())
             throw FormatError("Wii U file references missing title content");
         const Content& content = found->second;
+        const Region region = cluster_region(game, files, entry.cluster, physical_bytes(content));
         uint64_t logical_size = content.size;
         if (content.type & 2) {
             if (content.size % kBlock)
                 throw FormatError("invalid Wii U hashed content size");
             logical_size = content.size / kBlock * kPayload;
         }
-        range(0, (content.type & 1) ? align16(content.size) : content.size, region.size());
+        range(0, physical_bytes(content), region.size());
         range(entry.offset, entry.size, logical_size);
         return content;
     }
@@ -384,7 +431,7 @@ struct WiiUDisc::Impl {
         if (entry.size > kMaxFile)
             throw FormatError("disc file is too large");
         const Content& content = checked_content(entry);
-        const Region region = cluster_region(game, files, entry.cluster);
+        const Region region = cluster_region(game, files, entry.cluster, physical_bytes(content));
         if (!(content.type & 3))
             return read_region(region, entry.offset, entry.size);
 

@@ -93,6 +93,8 @@ const char* const kAnisoShown[] = {"Off (the game's)", "2x", "4x", "8x", "16x"};
 const char* const kAnisoStored[] = {"1", "2", "4", "8", "16"};
 const char* const kTextSizeShown[] = {"Smaller", "Normal", "Large", "Larger", "Largest"};
 const char* const kTextSizeStored[] = {"0.85", "1", "1.15", "1.3", "1.5"};
+const char* const kShadowQualityShown[] = {"Low", "Medium", "High"};
+const char* const kShadowQualityStored[] = {"low", "medium", "high"};
 
 // Beside the control when it fits there. A list or a slider fills its line,
 // and after one the note went past the edge and, wrapped to nothing there, was
@@ -226,6 +228,7 @@ void apply_live() {
     aurora_set_fps_overlay(env_on("DOL_AURORA_SHOW_FPS", false));
     apply_fps_position();
     aurora_set_pause_on_focus_lost(env_on("BLUEWAKE_PAUSE_UNFOCUSED", false));
+    aurora_set_background_input(env_on("BLUEWAKE_BACKGROUND_INPUT", false));
     bluewake_mouse_camera_reload();  // the mouse, both sticks, gyro and the mouse's buttons
     bluewake_haptics_reload();
     bluewake_climb_reload();
@@ -245,7 +248,8 @@ void apply_now(const bw_settings::Setting& s) {
         set_env("BLUEWAKE_FADE_FRAMES", value != "0" ? "6" : "0");
     if (next_launch(s))
         return;
-    if (std::strncmp(key, "BLUEWAKE_HD_", 12) == 0)  // the HD look and its parts (sun shadows)
+    if (std::strncmp(key, "BLUEWAKE_HD_", 12) == 0 ||  // the HD look and its parts (sun shadows)
+        std::strcmp(key, "DOL_AURORA_SUN_SHADOW_QUALITY") == 0)
         bluewake_hd_look_reload();
     else if (std::strcmp(key, "BLUEWAKE_MENU_PAUSES") == 0)
         read_menu_pauses();
@@ -259,6 +263,8 @@ void apply_now(const bw_settings::Setting& s) {
         aurora_set_forced_anisotropy(static_cast<unsigned>(std::atoi(value.c_str())));
     else if (std::strcmp(key, "BLUEWAKE_PAUSE_UNFOCUSED") == 0)
         aurora_set_pause_on_focus_lost(value != "0");
+    else if (std::strcmp(key, "BLUEWAKE_BACKGROUND_INPUT") == 0)
+        aurora_set_background_input(value != "0");
     else if (std::strcmp(key, "BLUEWAKE_FOREST_WATER_KEEP_TREES") == 0 ||
              std::strcmp(key, "BLUEWAKE_FOREST_WATER_30_MINUTES") == 0)
         bluewake_forest_water_reload();
@@ -645,6 +651,12 @@ bool choices(const char* key, const char* const** shown, const char* const** sto
         *shown = bw_desktop::kAnisoShown;
         *stored = bw_desktop::kAnisoStored;
         *count = 5;
+        return true;
+    }
+    if (std::strcmp(key, "DOL_AURORA_SUN_SHADOW_QUALITY") == 0) {
+        *shown = bw_desktop::kShadowQualityShown;
+        *stored = bw_desktop::kShadowQualityStored;
+        *count = 3;
         return true;
     }
     if (std::strcmp(key, "BLUEWAKE_MENU_TEXT_SIZE") == 0) {

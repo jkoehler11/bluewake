@@ -54,7 +54,7 @@
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density">
         </activity>
 
-        <!-- Help & Feedback > Share Session Log: the newest session log, read-only, to the app it is shared with. -->
+        <!-- Help & Feedback > Share Session Log: the newest two session logs, read-only, to the app they are shared with. -->
         <provider
             android:name="dev.bluewake.android.LogProvider"
             android:authorities="@PACKAGE@.logs"
