@@ -210,16 +210,19 @@ phases. Each one ends in a pull request, a row in "Results" above, and the row m
 
 ### Phase 1: the benchmark tour (`scripts/bench_tour.py`)
 
-**Run on a real build** (jslay88's #360, merged October 17). The first run is jkoehler11's, October 22, on an
-own-disc build of `main` at `7382708`, Linux (Ryzen 9 5900X), headless and unpaced: all five stops load, no `[fps-dip]`
-cause at any of them, busy 99% throughout (the game thread is the limit, as expected). Game frames a second, two runs
-from one state: Outset 64.64 / 64.93, Windfall 64.97 / 65.46, Dragon Roost Cavern 88.44 / 89.32, Forest Haven
-56.88 / 58.08, the sea by the Fortress 75.09 / 76.15, within 2.1% at every stop, checkpoints identical.
+**Implemented and measured** (jslay88's #360): the five-stop Mac/iPad runs are recorded in
+[the October 20 results](status/APPLE_RECIPE_TOUR_2026-10-20.md) and the table above. The synthetic tests check the
+harness; they do not qualify a real scene. The first Linux runs are jkoehler11's, October 22, on an own-disc build of
+`main` at `7382708` (Ryzen 9 5900X), headless and unpaced: all five stops load, no `[fps-dip]` cause at any of them,
+busy 99% throughout (the game thread is the limit, as expected). Game frames a second, two runs from one state:
+Outset 64.64 / 64.93, Windfall 64.97 / 65.46, Dragon Roost Cavern 88.44 / 89.32, Forest Haven 56.88 / 58.08, the sea
+by the Fortress 75.09 / 76.15, within 2.1% at every stop, checkpoints identical.
 
 Two runs only agree when they load the same guest state, and the card route the tour plays to make that state is not
 reproducible: the same build booted twice from the same card differs in CPU and MEM1 from retrace 300 (boot milestones
 identical), and its stop speeds moved by up to 7.5% with them. `--setup-state FILE` keeps the state one run made and
-loads it in the next, which is what the two-run check needs; keep the file out of the repository.
+loads it in the next, which is what the two-run check needs; keep the file out of the repository. A pass that never
+reached gameplay is refused rather than measured from (#458).
 
 The same build on a Steam Deck (VanGogh, 4 c / 8 t, SteamOS, headless and unpaced) gives, game frames a second:
 Outset 41.31 / 42.40, Windfall 41.25 / 42.60, Dragon Roost Cavern 54.48 / 55.74, Forest Haven 37.99 / 38.25, the sea by
@@ -228,9 +231,6 @@ the Fortress 48.88 / 48.36, checkpoints identical: the two runs differ by 0.7 to
 Deck's own card the route starts a new file (`name-input-complete` at retrace 632 where a continue reaches `play-scene`
 at 609), the setup pass saves a state on the name-entry screen, and the tour then reports 300 to 430 game frames a
 second with no stop loaded. A card copied from a machine whose log 1 has a save works.
-
-The five-stop Mac/iPad runs are recorded in [the October 20 results](status/APPLE_RECIPE_TOUR_2026-10-20.md) and the
-table above.
 
 *Goal:* one command that measures a build's speed in several places and proves two builds behave the same. Every
 later phase uses it.
