@@ -1,0 +1,78 @@
+# A throwaway build of the performance panel for testing on a real machine: the
+# Linux host binary, built the way the release is (the CI image's clang 18,
+# libc++, vendor Dawn, x86-64-v3), uploaded as an artifact. Not part of #537.
+name: Perf overlay test build
+
+on:
+  push:
+    branches: [perf-overlay-build]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Linux host binary (x86-64, glibc 2.39 floor)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4.4.1
+      - name: Build the shared Linux environment
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: scripts/linux
+          file: scripts/linux/Dockerfile
+          load: true
+          tags: bluewake-linux-ci:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Fetch the pinned public runtime
+        run: |
+          set -euo pipefail
+          docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/src" --workdir /src \
+            bluewake-linux-ci:${{ github.sha }} bash -euxo pipefail -c '
+              lock=config/dependencies.lock.json
+              url=$(python3 -c "import json;print([d[\"url\"] for d in json.load(open(\"$lock\"))[\"dependencies\"] if d[\"id\"]==\"recompcore\"][0])")
+              sha=$(python3 -c "import json;print([d[\"sha\"] for d in json.load(open(\"$lock\"))[\"dependencies\"] if d[\"id\"]==\"recompcore\"][0])")
+              git init ref/recompcore
+              git -C ref/recompcore fetch --depth 1 --no-tags --recurse-submodules=no "$url" "$sha"
+              git -C ref/recompcore checkout --detach FETCH_HEAD
+            '
+      - name: Build the host
+        run: |
+          set -euo pipefail
+          docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
+            --volume "$GITHUB_WORKSPACE:/src" --workdir /src \
+            bluewake-linux-ci:${{ github.sha }} bash -euxo pipefail -c '
+              cmake -S linux -B build/linux-host -G Ninja \
+                -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
+                -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+                "-DCMAKE_C_FLAGS=-D_GNU_SOURCE -march=x86-64-v3" \
+                "-DCMAKE_CXX_FLAGS=-stdlib=libc++ -march=x86-64-v3" \
+                -DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++ \
+                -DCMAKE_SHARED_LINKER_FLAGS=-stdlib=libc++ \
+                -DCMAKE_CXX_STANDARD_LIBRARIES= \
+                -DCMAKE_DISABLE_FIND_PACKAGE_SQLite3=TRUE \
+                -DCMAKE_DISABLE_FIND_PACKAGE_absl=TRUE \
+                -DDAWN_USE_GLFW=OFF \
+                -DAURORA_DAWN_PROVIDER=vendor -DAURORA_DAWN_LINKAGE=static \
+                -DAURORA_SDL3_PROVIDER=vendor -DAURORA_SDL3_LINKAGE=static
+              cmake --build build/linux-host --target bluewake --parallel 4
+              test -f build/linux-host/bluewake
+            '
+      - name: Say what was built
+        run: |
+          file build/linux-host/bluewake
+          ls -l build/linux-host/bluewake
+          echo "commit $GITHUB_SHA" > build/linux-host/BUILD-COMMIT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bluewake-perf-overlay-${{ github.sha }}
+          path: |
+            build/linux-host/bluewake
+            build/linux-host/BUILD-COMMIT.txt
+          if-no-files-found: error
+          retention-days: 5
